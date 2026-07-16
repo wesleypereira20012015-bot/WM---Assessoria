@@ -1,0 +1,560 @@
+/* ============================================================
+   WM ASSESSORIA — DESIGN SYSTEM v3 (corporativo clássico)
+   Base creme da identidade da marca + blocos marinho intercalados.
+   ============================================================ */
+
+:root {
+  /* Marca */
+  --marinho-950: #060f1e;
+  --marinho-900: #0a1729;
+  --marinho-800: #0f1f36;
+  --marinho-700: #16304f;
+  --ouro-300: #ead79b;
+  --ouro-400: #d8b45e;
+  --ouro-500: #c9a24a;
+  --ouro-600: #a9822f;
+  --ouro-700: #82611f;
+  --creme: #f3efe8;
+  --creme-200: #ece6d9;
+  --branco: #ffffff;
+  --nevoa-300: #aeb8c6;
+  --nevoa-500: #6b7688;
+  /* Semânticas */
+  --sucesso: #257a52;
+  --sucesso-claro: #2fa36b;
+  --whatsapp: #25d366;
+  --atencao: #9a6b12;
+  --erro: #b2453f;
+  /* Gradientes de assinatura (uso restrito: CTA e ícone da logo) */
+  --grad-ouro: linear-gradient(180deg, #ead79b 0%, #d8b45e 40%, #c9a24a 58%, #a9822f 100%);
+  --grad-horizonte: linear-gradient(90deg, rgba(201, 162, 74, 0), #c9a24a 50%, rgba(201, 162, 74, 0));
+  /* Raios */
+  --r-botao: 10px;
+  --r-card: 16px;
+  --r-bloco: 24px;
+
+  /* ---- Tema padrão: CLARO (creme) ---- */
+  --bg: var(--creme);
+  --texto: #4e586a;
+  --suave: #8a92a0;
+  --titulo: #0f1f36;
+  --acento: #a9822f;
+  --card-bg: #ffffff;
+  --card-borda: rgba(15, 31, 54, 0.09);
+  --linha: rgba(15, 31, 54, 0.12);
+  --linha-forte: rgba(169, 130, 47, 0.45);
+  --input-bg: #ffffff;
+  --input-borda: rgba(15, 31, 54, 0.16);
+  --sombra-card: 0 1px 2px rgba(15, 31, 54, 0.05), 0 10px 28px rgba(15, 31, 54, 0.07);
+  --sombra-card-hover: 0 2px 4px rgba(15, 31, 54, 0.06), 0 18px 44px rgba(15, 31, 54, 0.12);
+  --ok: var(--sucesso);
+}
+
+/* ---- Tema ESCURO (marinho) — aplicar a classe na seção ---- */
+.sec-escuro {
+  --bg: var(--marinho-900);
+  --texto: var(--nevoa-300);
+  --suave: var(--nevoa-500);
+  --titulo: #ffffff;
+  --acento: var(--ouro-400);
+  --card-bg: var(--marinho-800);
+  --card-borda: rgba(255, 255, 255, 0.08);
+  --linha: rgba(255, 255, 255, 0.1);
+  --linha-forte: rgba(201, 162, 74, 0.4);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-borda: rgba(201, 162, 74, 0.28);
+  --sombra-card: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --sombra-card-hover: 0 14px 40px rgba(0, 0, 0, 0.45);
+  --ok: var(--sucesso-claro);
+}
+
+.sec-claro {
+  --bg: var(--creme);
+}
+
+.sec-claro-2 {
+  --bg: var(--creme-200);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--texto);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(201, 162, 74, 0.3);
+  color: var(--marinho-900);
+}
+
+a {
+  color: var(--acento);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ouro-500);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ---------- Tipografia ---------- */
+.display {
+  font-family: var(--font-cormorant), serif;
+  font-weight: 600;
+  color: var(--titulo);
+  letter-spacing: 0.005em;
+}
+
+h1.display {
+  font-size: clamp(40px, 6.2vw, 76px);
+  line-height: 1.04;
+}
+
+h2.display {
+  font-size: clamp(30px, 3.8vw, 46px);
+  line-height: 1.12;
+}
+
+.display .g {
+  color: var(--acento);
+  font-style: italic;
+}
+
+/* Filete + rótulo — o mesmo desenho fino do logotipo */
+.eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--acento);
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 34px;
+  height: 1px;
+  background: var(--acento);
+  flex: none;
+}
+
+.mono {
+  font-family: var(--font-mono), monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---------- Layout ---------- */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.section {
+  padding: 104px 0;
+  position: relative;
+  background: var(--bg);
+  color: var(--texto);
+}
+
+.section-head {
+  max-width: 700px;
+  margin-bottom: 56px;
+}
+
+.section-head h2 {
+  margin-top: 16px;
+}
+
+.section-head p {
+  margin-top: 16px;
+  font-size: 17px;
+}
+
+/* ---------- Botões ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 13px 28px;
+  border-radius: var(--r-botao);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: filter 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.btn-ouro {
+  background: var(--grad-ouro);
+  color: var(--marinho-900);
+  box-shadow: 0 6px 18px rgba(169, 130, 47, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.btn-ouro:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 10px 26px rgba(169, 130, 47, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-whatsapp {
+  background: var(--whatsapp);
+  color: #06331a;
+}
+
+.btn-whatsapp:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--linha-forte);
+  color: var(--acento);
+}
+
+.btn-ghost:hover {
+  border-color: var(--acento);
+  background: rgba(201, 162, 74, 0.07);
+}
+
+/* ---------- Inputs ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--titulo);
+}
+
+.input {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border-radius: var(--r-botao);
+  border: 1px solid var(--input-borda);
+  background: var(--input-bg);
+  color: var(--titulo);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input::placeholder {
+  color: var(--suave);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--ouro-500);
+  box-shadow: 0 0 0 4px rgba(201, 162, 74, 0.15);
+}
+
+.input.erro {
+  border-color: var(--erro);
+}
+
+.field .msg-erro {
+  font-size: 12.5px;
+  color: var(--erro);
+}
+
+select.input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A9822F' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 44px;
+}
+
+select.input option {
+  background: var(--card-bg);
+  color: var(--titulo);
+}
+
+.input-prefixo {
+  position: relative;
+}
+
+.input-prefixo span.prefixo {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono), monospace;
+  font-size: 12.5px;
+  color: var(--acento);
+  pointer-events: none;
+}
+
+.input-prefixo .input {
+  padding-left: 52px;
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-borda);
+  border-radius: var(--r-card);
+  padding: 32px 28px 28px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--sombra-card);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+/* filete dourado fino no topo — eco do logotipo */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28px;
+  width: 34px;
+  height: 2px;
+  background: var(--acento);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--sombra-card-hover);
+}
+
+.card h3 {
+  font-family: var(--font-cormorant), serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--titulo);
+  margin: 16px 0 8px;
+  line-height: 1.2;
+}
+
+.card p {
+  font-size: 15px;
+}
+
+/* Ícone fino em círculo — sem preenchimento, sem brilho */
+.icone-fino {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1px solid var(--linha-forte);
+  color: var(--acento);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Chips (códigos fiscais) ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--linha-forte);
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.chip.ok {
+  border-color: rgba(47, 163, 107, 0.45);
+  color: var(--ok);
+}
+
+/* ---------- Utilidades ---------- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.btn-largo {
+  width: 100%;
+}
+
+.btn-compacto {
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 14px;
+}
+
+.hr-ouro {
+  height: 1px;
+  border: none;
+  background: var(--grad-horizonte);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(80px, 13vh, 150px) 0 clamp(130px, 18vh, 210px);
+  background:
+    radial-gradient(820px 420px at 80% -8%, rgba(201, 162, 74, 0.12), transparent 62%),
+    linear-gradient(180deg, var(--marinho-950) 0%, var(--marinho-900) 72%);
+}
+
+.hero-skyline {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.hero-foto {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.55) brightness(0.85);
+}
+
+.hero-foto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(6, 15, 30, 0.94) 0%, rgba(6, 15, 30, 0.78) 48%, rgba(6, 15, 30, 0.45) 100%),
+    linear-gradient(0deg, rgba(6, 15, 30, 0.85) 0%, rgba(6, 15, 30, 0.15) 40%);
+}
+
+.hero-conteudo {
+  position: relative;
+  z-index: 1;
+  max-width: 780px;
+}
+
+.hero-ctas {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 40px;
+}
+
+.hero-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 36px;
+}
+
+/* ---------- Galeria de obras (opcional) ---------- */
+.galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+  margin-top: 40px;
+}
+
+.galeria figure {
+  border-radius: var(--r-card);
+  overflow: hidden;
+  border: 1px solid var(--card-borda);
+  background: var(--card-bg);
+  box-shadow: var(--sombra-card);
+}
+
+.galeria img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.galeria figcaption {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--texto);
+}
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 900px) {
+  .nav-desktop {
+    display: none;
+  }
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 68px 0;
+  }
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .nav-cta {
+    display: none;
+  }
+}

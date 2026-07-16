@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p assets/icons)",
+      "Bash(cd \"/Users/wesleypereira/Documents/Advocacia /INSS DE OBRAS/Site\" && sed -i '' 's/width=\"150\" height=\"40\"/width=\"180\" height=\"40\"/g' index.html && grep -n 'width=\"180\" height=\"40\"' index.html)",
+      "Bash(cd \"/Users/wesleypereira/Documents/Advocacia /INSS DE OBRAS/Site\" && mkdir -p _versao-antiga && mv index.html script.js style.css _versao-antiga/ && mv assets _versao-antiga/ && ls -la . _versao-antiga _versao-antiga/assets/gallery)"
+    ]
+  }
+}

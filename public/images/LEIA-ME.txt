@@ -1,0 +1,30 @@
+PASTA DE IMAGENS DO SITE
+========================
+
+É só salvar a foto com o nome certo — o site encontra sozinho.
+Nada quebra se a foto não existir (o site usa uma alternativa).
+
+FOTOS PRINCIPAIS (salve nesta pasta):
+
+  hero.jpg            → foto grande do TOPO do site
+                        (ideal: obra/canteiro, horizontal, boa resolução;
+                        o site escurece a foto automaticamente para o
+                        texto continuar legível)
+  equipe-wesley.jpg   → foto do Wesley (seção "Quem somos")
+  equipe-mirela.jpg   → foto da Mirela (seção "Quem somos")
+  og.png              → imagem ao compartilhar o link no WhatsApp
+                        (tamanho ideal: 1200 x 630 pixels)
+
+GALERIA DE OBRAS (opcional):
+
+  Crie a pasta "obras" aqui dentro e jogue as fotos nela.
+  Cada foto aparece automaticamente na seção "Resultados".
+  O NOME DO ARQUIVO VIRA A LEGENDA:
+     casa-em-araras.jpg      → legenda "Casa em araras"
+     galpao-cuiaba.jpg       → legenda "Galpao cuiaba"
+
+DICAS:
+  - Formatos aceitos: .jpg, .jpeg, .png, .webp
+  - Para trocar uma foto: apague a antiga e salve a nova com o mesmo nome.
+  - Evite fotos muito pesadas (acima de ~2 MB) para o site continuar rápido.
+    (No iPhone/Mac: exportar como JPEG em qualidade média resolve.)
