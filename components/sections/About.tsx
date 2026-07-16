@@ -6,13 +6,28 @@ import { comDestaque } from "@/lib/texto";
 import Chip from "@/components/ui/Chip";
 import Reveal from "@/components/ui/Reveal";
 
+/**
+ * Encontra a foto na pasta public/images, aceitando qualquer extensão
+ * comum (.jpg, .jpeg, .png, .webp). Assim, basta salvar o arquivo com o
+ * nome certo — não importa o formato. Retorna null se não existir.
+ */
+function acharFoto(foto: string): string | null {
+  const base = foto.replace(/\.[^./]+$/, ""); // tira a extensão do caminho configurado
+  for (const ext of [".jpg", ".jpeg", ".png", ".webp"]) {
+    if (existsSync(path.join(process.cwd(), "public", `${base}${ext}`))) {
+      return `${base}${ext}`;
+    }
+  }
+  return null;
+}
+
 /** Foto do especialista; se o arquivo ainda não existir, mostra a inicial. */
 function Foto({ nome, foto }: { nome: string; foto: string }) {
-  const existe = existsSync(path.join(process.cwd(), "public", foto));
-  if (existe) {
+  const src = acharFoto(foto);
+  if (src) {
     return (
       <Image
-        src={foto}
+        src={src}
         alt={`Foto de ${nome}`}
         width={132}
         height={132}
