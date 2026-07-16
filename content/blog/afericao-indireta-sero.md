@@ -2,6 +2,7 @@
 titulo: Aferição indireta: como a Receita calcula o INSS da sua obra "no chute" — e por que sai caro
 descricao: Quando não há documentação, o SERO calcula a mão de obra por um valor padrão por metro quadrado. Entenda o cálculo e as formas legais de reduzi-lo.
 data: 2026-07-02
+capa: /images/blog/afericao.svg
 ---
 
 Se a sua obra não tem documentação da mão de obra (folha de pagamento, notas fiscais de empreiteiras), a Receita Federal não fica sem cobrar: ela **arbitra** o valor por conta própria. É a chamada **aferição indireta**, feita pelo SERO.

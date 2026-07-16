@@ -38,7 +38,8 @@ export const site = {
     whatsapp: "https://wa.me/5565999725622",
     whatsappMensagem: "Olá! Quero uma análise gratuita do INSS da minha obra.",
     instagram:
-      "https://www.instagram.com/wesley.inssobras?igsh=Y2c3MWpndXJ5MnB1&utm_source=qr",
+      "https://www.instagram.com/wm.inssdeobras?igsh=Y2c3MWpndXJ5MnB1&utm_source=qr",
+    instagramArroba: "@wm.inssdeobras",
     // Endereço do site depois de publicado (usado no SEO)
     url: "https://wmassessoria.vercel.app",
   },

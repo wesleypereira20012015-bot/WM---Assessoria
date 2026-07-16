@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F1F36"/>
+      <stop offset="1" stop-color="#0A1729"/>
+    </linearGradient>
+    <linearGradient id="au" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAD79B"/>
+      <stop offset="1" stop-color="#C9A24A"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <g stroke="#16304F" stroke-width="1">
+    <path d="M0 300h640M0 330h640"/>
+  </g>
+  <!-- documento (certidão) -->
+  <g transform="translate(210 66)">
+    <rect x="0" y="0" width="220" height="230" rx="10" fill="#0A1729" stroke="url(#au)" stroke-width="2"/>
+    <rect x="24" y="30" width="120" height="10" rx="5" fill="#C9A24A" opacity="0.85"/>
+    <g stroke="#AEB8C6" stroke-width="4" stroke-linecap="round" opacity="0.5">
+      <path d="M24 66h172M24 88h172M24 110h140M24 132h172M24 154h110"/>
+    </g>
+    <!-- selo com fita -->
+    <g transform="translate(158 150)">
+      <path d="M-14 20l-10 40 24-14 24 14-10-40z" fill="#A9822F"/>
+      <circle cx="0" cy="8" r="30" fill="url(#au)"/>
+      <path d="M-12 8l8 9 16-18" fill="none" stroke="#0A1729" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <text x="60" y="326" font-family="'IBM Plex Mono', monospace" font-size="15" letter-spacing="4" fill="#C9A24A">CND</text>
+</svg>

@@ -53,7 +53,7 @@ export default function Footer() {
               </li>
               <li>
                 <a href={site.empresa.instagram} target="_blank" rel="noopener noreferrer">
-                  Instagram — @wesley.inssobras
+                  Instagram — {site.empresa.instagramArroba}
                 </a>
               </li>
             </ul>

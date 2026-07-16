@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F1F36"/>
+      <stop offset="1" stop-color="#0A1729"/>
+    </linearGradient>
+    <linearGradient id="au4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAD79B"/>
+      <stop offset="1" stop-color="#C9A24A"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg4)"/>
+  <!-- grade de planta (blueprint) -->
+  <g stroke="#16304F" stroke-width="1" opacity="0.6">
+    <path d="M0 60h640M0 120h640M0 180h640M0 240h640M0 300h640"/>
+    <path d="M80 0v360M160 0v360M240 0v360M320 0v360M400 0v360M480 0v360M560 0v360"/>
+  </g>
+  <!-- casa com cotas -->
+  <g transform="translate(200 96)" stroke="url(#au4)" stroke-width="2.5" fill="none" stroke-linejoin="round">
+    <path d="M0 60L120 0L240 60"/>
+    <rect x="24" y="60" width="192" height="130"/>
+    <rect x="96" y="120" width="48" height="70"/>
+  </g>
+  <!-- cotas de medição -->
+  <g stroke="#EAD79B" stroke-width="1.5" opacity="0.85">
+    <path d="M224 300h192M224 292v16M416 292v16"/>
+    <path d="M440 156v134M432 156h16M432 290h16"/>
+  </g>
+  <text x="320" y="326" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="12" letter-spacing="2" fill="#C9A24A">ÁREA × VAU × %</text>
+  <text x="60" y="332" font-family="'IBM Plex Mono', monospace" font-size="14" letter-spacing="4" fill="#C9A24A">SERO</text>
+</svg>

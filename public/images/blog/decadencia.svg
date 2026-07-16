@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F1F36"/>
+      <stop offset="1" stop-color="#0A1729"/>
+    </linearGradient>
+    <linearGradient id="au3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAD79B"/>
+      <stop offset="1" stop-color="#C9A24A"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg3)"/>
+  <g stroke="#16304F" stroke-width="1" opacity="0.7">
+    <path d="M0 300h640"/>
+  </g>
+  <!-- ampulheta -->
+  <g transform="translate(320 180)">
+    <g stroke="url(#au3)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-70 -90h140M-70 90h140"/>
+      <path d="M-58 -90c0 55 58 62 58 90 0 -28 58 -35 58 -90"/>
+      <path d="M-58 90c0 -55 58 -62 58 -90 0 28 58 35 58 90"/>
+    </g>
+    <!-- areia -->
+    <path d="M-40 -78c0 34 40 42 40 60 0 -18 40 -26 40 -60z" fill="url(#au3)" opacity="0.85"/>
+    <path d="M-6 78h12l-6 -30z" fill="url(#au3)"/>
+    <line x1="0" y1="0" x2="0" y2="40" stroke="#EAD79B" stroke-width="2" opacity="0.7"/>
+  </g>
+  <!-- selo 5 anos -->
+  <g transform="translate(468 118)">
+    <circle r="52" fill="none" stroke="url(#au3)" stroke-width="2" stroke-dasharray="4 6"/>
+    <text x="0" y="4" text-anchor="middle" font-family="'Cormorant Garamond', serif" font-weight="600" font-size="46" fill="#EAD79B">5</text>
+    <text x="0" y="28" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" letter-spacing="3" fill="#C9A24A">ANOS</text>
+  </g>
+  <text x="60" y="332" font-family="'IBM Plex Mono', monospace" font-size="14" letter-spacing="4" fill="#C9A24A">DECADÊNCIA</text>
+</svg>

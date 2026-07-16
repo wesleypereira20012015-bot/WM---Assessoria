@@ -2,6 +2,7 @@
 titulo: Construiu há mais de 5 anos? Você pode não dever nada de INSS
 descricao: A decadência extingue o débito de INSS de obras antigas — e muita gente paga sem precisar. Veja como funciona e como comprovar.
 data: 2026-07-06
+capa: /images/blog/decadencia.svg
 ---
 
 Existe uma regra que a maioria dos donos de obra não conhece — e que já economizou dezenas de milhares de reais para nossos clientes: a **decadência**.

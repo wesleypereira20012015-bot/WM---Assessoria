@@ -2,6 +2,7 @@
 titulo: CNO: por que toda obra precisa desse cadastro (e o que acontece sem ele)
 descricao: O Cadastro Nacional de Obras é a "certidão de nascimento" da sua construção na Receita Federal. Entenda quando inscrever, quem é obrigado e os riscos de deixar para depois.
 data: 2026-07-04
+capa: /images/blog/cno.svg
 ---
 
 Toda obra de construção civil no Brasil precisa "nascer" para a Receita Federal — e isso acontece pelo **CNO**, o Cadastro Nacional de Obras (que substituiu a antiga matrícula CEI).

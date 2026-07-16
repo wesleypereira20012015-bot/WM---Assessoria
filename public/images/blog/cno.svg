@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F1F36"/>
+      <stop offset="1" stop-color="#0A1729"/>
+    </linearGradient>
+    <linearGradient id="au2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAD79B"/>
+      <stop offset="1" stop-color="#C9A24A"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg2)"/>
+  <!-- prédios de fundo -->
+  <g fill="#16304F" opacity="0.6">
+    <rect x="70" y="150" width="70" height="150"/>
+    <rect x="150" y="120" width="54" height="180"/>
+    <rect x="470" y="140" width="80" height="160"/>
+  </g>
+  <!-- edifício em construção -->
+  <g stroke="url(#au2)" stroke-width="2.5" fill="none" stroke-linejoin="round">
+    <rect x="250" y="120" width="150" height="180"/>
+    <path d="M250 160h150M250 200h150M250 240h150M250 280h150"/>
+    <path d="M300 120v180M350 120v180"/>
+  </g>
+  <!-- vergalhões no topo -->
+  <g stroke="#EAD79B" stroke-width="2" opacity="0.9">
+    <path d="M262 120v-18M292 120v-26M322 120v-16M352 120v-24M382 120v-18"/>
+  </g>
+  <!-- guindaste -->
+  <g stroke="url(#au2)" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <path d="M150 300V70M150 70h150M150 70l-40 26M150 84l130-14M280 70v14"/>
+    <path d="M246 70v34"/>
+  </g>
+  <rect x="240" y="96" width="12" height="9" fill="#C9A24A" opacity="0.5"/>
+  <!-- solo -->
+  <path d="M0 300h640" stroke="#C9A24A" stroke-width="1.5" opacity="0.5"/>
+  <text x="60" y="332" font-family="'IBM Plex Mono', monospace" font-size="15" letter-spacing="4" fill="#C9A24A">CNO</text>
+</svg>

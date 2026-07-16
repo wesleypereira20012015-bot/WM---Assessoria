@@ -2,6 +2,7 @@
 titulo: CND de obra: o documento que destrava (ou trava) seu imóvel
 descricao: Sem a Certidão Negativa de Débitos, sua obra não é averbada no cartório — e o imóvel não pode ser vendido nem financiado. Entenda como ela funciona.
 data: 2026-07-08
+capa: /images/blog/cnd.svg
 ---
 
 Você terminou a obra, o imóvel está pronto — mas, para o cartório, ele ainda **não existe oficialmente**. É a averbação na matrícula que transforma a construção em patrimônio de verdade, e o cartório só averba com um documento em mãos: a **CND de obra** (Certidão Negativa de Débitos).
