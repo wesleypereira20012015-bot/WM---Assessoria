@@ -1,11 +1,11 @@
-import { neon } from "@neondatabase/serverless";
 import { promises as fs } from "fs";
 import path from "path";
+import { supabaseAnon, supabaseService, supabaseConfigurado } from "./supabase";
 
 /**
  * Banco de leads.
- * - Em produção (Vercel): usa Postgres (Neon) via DATABASE_URL.
- * - Em desenvolvimento sem banco: salva em .data/leads.json (arquivo local).
+ * - Produção: Supabase (Postgres com RLS). Inserção pública, leitura protegida.
+ * - Desenvolvimento sem Supabase: salva em .data/leads.json (arquivo local).
  */
 
 export interface Lead {
@@ -21,41 +21,22 @@ export interface Lead {
 
 const ARQUIVO_LOCAL = path.join(process.cwd(), ".data", "leads.json");
 
-function sql() {
-  const url = process.env.DATABASE_URL;
-  if (!url) return null;
-  return neon(url);
-}
-
-async function garantirTabela() {
-  const db = sql();
-  if (!db) return;
-  await db`
-    CREATE TABLE IF NOT EXISTS leads (
-      id SERIAL PRIMARY KEY,
-      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      nome TEXT NOT NULL,
-      whatsapp TEXT NOT NULL,
-      dados_obra JSONB NOT NULL DEFAULT '{}',
-      resultado JSONB NOT NULL DEFAULT '{}',
-      origem TEXT,
-      consentimento BOOLEAN NOT NULL DEFAULT FALSE
-    )
-  `;
-}
-
+/** Salva um lead (Supabase se configurado; senão, arquivo local). */
 export async function salvarLead(lead: Lead): Promise<void> {
-  const db = sql();
-  if (db) {
-    await garantirTabela();
-    await db`
-      INSERT INTO leads (nome, whatsapp, dados_obra, resultado, origem, consentimento)
-      VALUES (${lead.nome}, ${lead.whatsapp}, ${JSON.stringify(lead.dados_obra)},
-              ${JSON.stringify(lead.resultado)}, ${lead.origem ?? null}, ${lead.consentimento})
-    `;
+  const sb = supabaseAnon();
+  if (sb) {
+    const { error } = await sb.from("leads").insert({
+      nome: lead.nome,
+      whatsapp: lead.whatsapp,
+      dados_obra: lead.dados_obra,
+      resultado: lead.resultado,
+      origem: lead.origem ?? null,
+      consentimento: lead.consentimento,
+    });
+    if (error) throw new Error(`Supabase: ${error.message}`);
     return;
   }
-  // Fallback local (desenvolvimento sem banco)
+  // Fallback local (desenvolvimento sem Supabase)
   await fs.mkdir(path.dirname(ARQUIVO_LOCAL), { recursive: true });
   let atuais: Lead[] = [];
   try {
@@ -63,25 +44,41 @@ export async function salvarLead(lead: Lead): Promise<void> {
   } catch {
     /* arquivo ainda não existe */
   }
-  atuais.push({
-    ...lead,
-    id: atuais.length + 1,
-    criado_em: new Date().toISOString(),
-  });
+  atuais.push({ ...lead, id: atuais.length + 1, criado_em: new Date().toISOString() });
   await fs.writeFile(ARQUIVO_LOCAL, JSON.stringify(atuais, null, 2));
 }
 
+/** Lista os leads para o painel /admin. */
 export async function listarLeads(): Promise<Lead[]> {
-  const db = sql();
-  if (db) {
-    await garantirTabela();
-    const linhas = await db`SELECT * FROM leads ORDER BY criado_em DESC`;
-    return linhas as unknown as Lead[];
+  const sb = supabaseService();
+  if (sb) {
+    const { data, error } = await sb
+      .from("leads")
+      .select("*")
+      .order("criado_em", { ascending: false });
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    return (data ?? []) as Lead[];
   }
+  // Supabase salva os leads, mas sem a service_role o /admin não pode lê-los.
+  if (supabaseConfigurado) return [];
+  // Fallback local
   try {
     const leads: Lead[] = JSON.parse(await fs.readFile(ARQUIVO_LOCAL, "utf8"));
     return leads.reverse();
   } catch {
     return [];
   }
+}
+
+/**
+ * Onde os leads estão sendo guardados/lidos — usado pelo /admin para
+ * mostrar a mensagem certa.
+ *  - "supabase"          → lendo do Supabase (service_role configurada)
+ *  - "supabase-sem-chave"→ salvando no Supabase, mas sem chave para ler aqui
+ *  - "local"             → arquivo .data/leads.json (desenvolvimento)
+ */
+export function statusLeitura(): "supabase" | "supabase-sem-chave" | "local" {
+  if (supabaseService()) return "supabase";
+  if (supabaseConfigurado) return "supabase-sem-chave";
+  return "local";
 }

@@ -105,17 +105,30 @@ npm install     # só na primeira vez
 npm run dev     # abre em http://localhost:3000
 ```
 
-Sem banco configurado, os leads de teste ficam no arquivo `.data/leads.json`.
+Com o Supabase configurado (`.env.local`), os leads já vão para o banco real, mesmo em teste. Sem nenhuma configuração, caem no arquivo `.data/leads.json`.
+
+## 6b. Onde ficam os leads (Supabase)
+
+Os leads do formulário e da calculadora são salvos no **Supabase** (banco na nuvem). Você pode vê-los de duas formas:
+
+- **Pelo painel do Supabase** (mais fácil): entre em [supabase.com](https://supabase.com) → projeto **WM - Assessoria** → **Table Editor → leads**. Tudo aparece ali, dá para exportar em CSV.
+- **Pela página `/admin` do site**: só funciona se você adicionar a chave secreta `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Settings → API → service_role) nas variáveis de ambiente. Sem ela, a página avisa e aponta para o painel do Supabase.
+
+Segurança: qualquer visitante pode **enviar** um lead, mas **ninguém consegue ler** os leads pela internet — a leitura exige a chave secreta (isso é garantido pelo RLS do banco).
 
 ## 7. Publicação na Vercel (primeira vez)
 
 1. Crie conta gratuita em [vercel.com](https://vercel.com) (pode entrar com GitHub).
 2. Suba esta pasta para um repositório no GitHub (ou use `npx vercel` direto do terminal).
 3. Na Vercel: **Add New → Project → importe o repositório**. Ela detecta Next.js sozinha — não mude nada e clique em **Deploy**.
-4. Banco de leads: no projeto da Vercel, aba **Storage → Create Database → Neon (Postgres)** → conectar ao projeto. A variável `DATABASE_URL` é criada automaticamente.
-5. Senha do admin: **Settings → Environment Variables** → adicione `ADMIN_PASSWORD` com a senha que você quiser → **Redeploy**.
-6. Domínio próprio (ex.: `wmassessoria.com.br`): **Settings → Domains** → siga as instruções de DNS.
-7. Depois de ter o domínio final, atualize o campo `empresa.url` em `content/site.ts` (usado pelo Google/SEO).
+4. **Variáveis de ambiente** (Settings → Environment Variables) — adicione as mesmas do seu `.env.local`:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - `ADMIN_PASSWORD` (a senha do /admin que você escolher)
+   - `SUPABASE_SERVICE_ROLE_KEY` (opcional, só se quiser ver os leads na página /admin)
+   Depois clique em **Redeploy**.
+5. Domínio próprio (ex.: `wmassessoria.com.br`): **Settings → Domains** → siga as instruções de DNS.
+6. Depois de ter o domínio final, atualize o campo `empresa.url` em `content/site.ts` (usado pelo Google/SEO).
 
 ---
 

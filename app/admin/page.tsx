@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { autenticar, estaAutenticado, sair } from "@/lib/admin-auth";
-import { listarLeads } from "@/lib/db";
+import { listarLeads, statusLeitura } from "@/lib/db";
 
 export const metadata = { title: "Leads · WM Assessoria", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -49,6 +49,7 @@ export default async function AdminPage() {
   }
 
   const leads = await listarLeads();
+  const status = statusLeitura();
 
   return (
     <main className="container section">
@@ -68,7 +69,37 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {leads.length === 0 ? (
+      {status === "supabase-sem-chave" ? (
+        <div
+          style={{
+            padding: "20px 24px",
+            border: "1px solid var(--linha-forte)",
+            borderRadius: 16,
+            background: "var(--card-bg)",
+            fontSize: 15,
+            lineHeight: 1.7,
+          }}
+        >
+          <p style={{ color: "var(--titulo)", fontWeight: 600, marginBottom: 8 }}>
+            Os leads estão sendo salvos no Supabase. ✓
+          </p>
+          <p>
+            Para vê-los <strong>aqui nesta página</strong>, adicione a variável{" "}
+            <code style={{ color: "var(--acento)" }}>SUPABASE_SERVICE_ROLE_KEY</code> (na Vercel ou no
+            arquivo <code>.env.local</code>). Enquanto isso, você pode consultar todos os leads
+            direto no painel do Supabase, em{" "}
+            <a
+              href="https://supabase.com/dashboard/project/wlpvaasjvtqtdtlkoxvy/editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "underline" }}
+            >
+              Table Editor → leads
+            </a>
+            .
+          </p>
+        </div>
+      ) : leads.length === 0 ? (
         <p>Nenhum lead ainda. Quando alguém usar a calculadora ou o formulário, aparece aqui.</p>
       ) : (
         <div style={{ overflowX: "auto", border: "1px solid var(--linha)", borderRadius: 16 }}>
