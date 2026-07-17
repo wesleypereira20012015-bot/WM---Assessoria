@@ -7,15 +7,17 @@ import { comDestaque } from "@/lib/texto";
 import { linkWhatsApp } from "@/lib/whatsapp";
 import { enviarLead, mascaraWhatsApp, whatsappValido } from "@/lib/lead-client";
 import Button from "./Button";
-import { Input } from "./Input";
+import { Input, Textarea } from "./Input";
 import Reveal from "./Reveal";
 
-/** Faixa CTA final: promessa + formulário mínimo (nome + WhatsApp). */
+/** Faixa CTA final: promessa + formulário (nome, WhatsApp, e-mail e situação da obra). */
 export default function CTABand() {
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [email, setEmail] = useState("");
+  const [situacao, setSituacao] = useState("");
   const [consent, setConsent] = useState(false);
-  const [erros, setErros] = useState<{ nome?: string; whatsapp?: string; consent?: string }>({});
+  const [erros, setErros] = useState<{ nome?: string; whatsapp?: string; email?: string; consent?: string }>({});
   const [estado, setEstado] = useState<"inicio" | "enviando" | "ok" | "falha">("inicio");
 
   async function enviar(e: React.FormEvent) {
@@ -23,6 +25,7 @@ export default function CTABand() {
     const novos: typeof erros = {};
     if (nome.trim().length < 2) novos.nome = "Informe seu nome.";
     if (!whatsappValido(whatsapp)) novos.whatsapp = "Informe um WhatsApp válido com DDD.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) novos.email = "Informe um e-mail válido.";
     if (!consent) novos.consent = "É preciso autorizar o contato.";
     setErros(novos);
     if (Object.keys(novos).length) return;
@@ -31,6 +34,8 @@ export default function CTABand() {
     const ok = await enviarLead({
       nome: nome.trim(),
       whatsapp,
+      email: email.trim(),
+      situacao_obra: situacao.trim() || undefined,
       consentimento: consent,
       dados_obra: { origem_formulario: "cta-final" },
     });
@@ -104,6 +109,25 @@ export default function CTABand() {
                     autoComplete="tel"
                   />
                 </div>
+                <Input
+                  label={site.ctaFinal.labelEmail}
+                  id="cta-email"
+                  type="email"
+                  inputMode="email"
+                  placeholder={site.ctaFinal.placeholderEmail}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  erro={erros.email}
+                  autoComplete="email"
+                />
+                <Textarea
+                  label={site.ctaFinal.labelSituacao}
+                  id="cta-situacao"
+                  placeholder={site.ctaFinal.placeholderSituacao}
+                  value={situacao}
+                  onChange={(e) => setSituacao(e.target.value)}
+                  rows={4}
+                />
                 <label
                   style={{
                     display: "flex",

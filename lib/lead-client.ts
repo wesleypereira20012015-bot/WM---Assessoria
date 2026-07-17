@@ -30,6 +30,8 @@ export function origemUTM(): string {
 export interface EnvioLead {
   nome: string;
   whatsapp: string;
+  email?: string;
+  situacao_obra?: string;
   consentimento: boolean;
   dados_obra?: Record<string, unknown>;
   resultado?: Record<string, unknown>;

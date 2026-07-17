@@ -43,6 +43,33 @@ export function Input({
   );
 }
 
+/** Campo de texto longo (várias linhas) do design system. */
+export function Textarea({
+  label,
+  id,
+  erro,
+  ...rest
+}: BaseProps & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <textarea
+        id={id}
+        className={`input ${erro ? "erro" : ""}`}
+        style={{ minHeight: 96, resize: "vertical", lineHeight: 1.5, paddingTop: 12 }}
+        aria-invalid={!!erro}
+        aria-describedby={erro ? `${id}-erro` : undefined}
+        {...rest}
+      />
+      {erro && (
+        <span className="msg-erro" id={`${id}-erro`} role="alert">
+          {erro}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Campo select do design system. */
 export function Select({
   label,

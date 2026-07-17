@@ -22,7 +22,7 @@ function acharFoto(foto: string): string | null {
 }
 
 /** Foto do especialista; se o arquivo ainda não existir, mostra a inicial. */
-function Foto({ nome, foto }: { nome: string; foto: string }) {
+function Foto({ nome, foto, posicao }: { nome: string; foto: string; posicao?: string }) {
   const src = acharFoto(foto);
   if (src) {
     return (
@@ -31,7 +31,13 @@ function Foto({ nome, foto }: { nome: string; foto: string }) {
         alt={`Foto de ${nome}`}
         width={132}
         height={132}
-        style={{ borderRadius: "50%", objectFit: "cover", border: "2px solid var(--linha-forte)" }}
+        style={{
+          borderRadius: "50%",
+          objectFit: "cover",
+          objectPosition: posicao ?? "center",
+          border: "2px solid var(--linha-forte)",
+          aspectRatio: "1 / 1",
+        }}
       />
     );
   }
@@ -91,7 +97,7 @@ export default function About() {
                   className="card"
                   style={{ display: "flex", alignItems: "center", gap: 24, padding: 24 }}
                 >
-                  <Foto nome={p.nome} foto={p.foto} />
+                  <Foto nome={p.nome} foto={p.foto} posicao={p.posicao} />
                   <div>
                     <h3 style={{ margin: 0 }}>{p.nome}</h3>
                     <p style={{ fontSize: 13, color: "var(--suave)", marginTop: 4 }}>{p.cargo}</p>

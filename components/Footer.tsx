@@ -70,8 +70,27 @@ export default function Footer() {
             >
               Especialistas
             </h3>
-            <p style={{ fontSize: 14.5 }}>{site.empresa.especialistas}</p>
-            <p style={{ marginTop: 10, fontSize: 14.5 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {site.quemSomos.pessoas.map((p) => (
+                <span
+                  key={p.nome}
+                  style={{
+                    padding: "10px 16px",
+                    border: "1px solid var(--linha-forte)",
+                    borderRadius: 10,
+                    background: "rgba(201, 162, 74, 0.06)",
+                    color: "var(--titulo)",
+                    fontFamily: "var(--font-cormorant), serif",
+                    fontSize: 18,
+                    fontWeight: 600,
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  {p.nome}
+                </span>
+              ))}
+            </div>
+            <p style={{ marginTop: 16, fontSize: 14.5 }}>
               <Link href="/politica-de-privacidade">Política de privacidade</Link>
             </p>
           </div>

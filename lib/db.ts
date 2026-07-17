@@ -13,6 +13,8 @@ export interface Lead {
   criado_em?: string;
   nome: string;
   whatsapp: string;
+  email?: string;
+  situacao_obra?: string;
   dados_obra: Record<string, unknown>;
   resultado: Record<string, unknown>;
   origem?: string;
@@ -28,6 +30,8 @@ export async function salvarLead(lead: Lead): Promise<void> {
     const { error } = await sb.from("leads").insert({
       nome: lead.nome,
       whatsapp: lead.whatsapp,
+      email: lead.email ?? null,
+      situacao_obra: lead.situacao_obra ?? null,
       dados_obra: lead.dados_obra,
       resultado: lead.resultado,
       origem: lead.origem ?? null,

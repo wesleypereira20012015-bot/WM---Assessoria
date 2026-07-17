@@ -13,12 +13,17 @@ export async function POST(req: NextRequest) {
   const nome = String(corpo.nome ?? "").trim().slice(0, 120);
   const whatsapp = String(corpo.whatsapp ?? "").replace(/\D/g, "");
   const consentimento = corpo.consentimento === true;
+  const email = String(corpo.email ?? "").trim().slice(0, 160);
+  const situacao = String(corpo.situacao_obra ?? "").trim().slice(0, 2000);
 
   if (nome.length < 2) {
     return NextResponse.json({ erro: "Nome obrigatório" }, { status: 400 });
   }
   if (whatsapp.length < 10 || whatsapp.length > 13) {
     return NextResponse.json({ erro: "WhatsApp inválido" }, { status: 400 });
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return NextResponse.json({ erro: "E-mail inválido" }, { status: 400 });
   }
   if (!consentimento) {
     return NextResponse.json({ erro: "Consentimento obrigatório" }, { status: 400 });
@@ -28,6 +33,8 @@ export async function POST(req: NextRequest) {
     await salvarLead({
       nome,
       whatsapp,
+      email: email || undefined,
+      situacao_obra: situacao || undefined,
       consentimento,
       dados_obra: (corpo.dados_obra as Record<string, unknown>) ?? {},
       resultado: (corpo.resultado as Record<string, unknown>) ?? {},

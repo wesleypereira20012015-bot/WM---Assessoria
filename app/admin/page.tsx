@@ -106,7 +106,7 @@ export default async function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 760 }}>
             <thead>
               <tr style={{ background: "var(--marinho-800)" }}>
-                {["Data", "Nome", "WhatsApp", "Obra", "Resultado", "Origem"].map((h) => (
+                {["Data", "Nome", "WhatsApp", "E-mail", "Situação da obra", "Obra", "Resultado", "Origem"].map((h) => (
                   <th
                     key={h}
                     className="mono"
@@ -134,6 +134,12 @@ export default async function AdminPage() {
                     <a href={`https://wa.me/55${String(l.whatsapp).replace(/\D/g, "").replace(/^55/, "")}`} target="_blank" rel="noopener noreferrer">
                       {l.whatsapp}
                     </a>
+                  </td>
+                  <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                    {l.email ? <a href={`mailto:${l.email}`}>{l.email}</a> : "—"}
+                  </td>
+                  <td style={{ padding: "12px 16px", maxWidth: 280, whiteSpace: "pre-wrap" }}>
+                    {l.situacao_obra || "—"}
                   </td>
                   <td style={{ padding: "12px 16px", maxWidth: 260 }}>
                     {Object.entries(l.dados_obra ?? {})

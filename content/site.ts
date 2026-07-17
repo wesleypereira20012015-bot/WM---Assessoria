@@ -250,12 +250,16 @@ export const site = {
         cargo: "Especialista em INSS de Obras",
         // Coloque a foto em public/images/equipe-wesley.jpg
         foto: "/images/equipe-wesley.jpg",
+        // Enquadramento da foto no círculo: "50% 50%" = centro.
+        // Diminua o 2º número para mostrar mais do rosto (topo).
+        posicao: "50% 22%",
       },
       {
         nome: "Mirela Rodrigues",
         cargo: "Especialista em INSS de Obras",
         // Coloque a foto em public/images/equipe-mirela.jpg
         foto: "/images/equipe-mirela.jpg",
+        posicao: "50% 30%",
       },
     ],
     chips: ["+5 anos de mercado", "Atuação nacional", "PF · PJ · Licitações"],
@@ -323,8 +327,14 @@ export const site = {
   ctaFinal: {
     titulo: "Descubra quanto você pode *economizar*",
     subtitulo:
-      "Deixe seu nome e WhatsApp: um especialista analisa sua obra gratuitamente e responde ainda hoje.",
+      "Preencha os dados abaixo: um especialista analisa sua obra gratuitamente e responde ainda hoje.",
     botao: "Quero minha análise gratuita",
+    // Rótulos e textos de ajuda dos campos do formulário final
+    labelSituacao: "Situação da sua obra",
+    placeholderSituacao:
+      "Conte um pouco: tipo e tamanho da obra, se está em andamento ou concluída, se já tem CNO, se recebeu alguma notificação da Receita...",
+    labelEmail: "Seu e-mail",
+    placeholderEmail: "voce@email.com",
   },
 
   // ---------- RODAPÉ ----------
