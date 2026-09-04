@@ -1,0 +1,152 @@
+{
+  "name": "WM · Coleta de referências",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "coleta-gatilho",
+      "name": "Todo dia às 3h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-660, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "url",
+              "name": "supabase_url",
+              "value": "https://SEU-PROJETO.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "perfis",
+              "name": "perfis",
+              "value": "={{ [\"contabil.obras\", \"engenharia.legal\", \"regulariza.obra\"] }}",
+              "type": "array"
+            },
+            {
+              "id": "limite",
+              "name": "posts_por_perfil",
+              "value": 30,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "coleta-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-440, 300],
+      "notes": "Único lugar para editar: endereço do Supabase e os perfis concorrentes."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeout",
+              "value": "300"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ directUrls: $json.perfis.map(p => `https://www.instagram.com/${p}/`), resultsType: \"posts\", resultsLimit: $json.posts_por_perfil, addParentData: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "coleta-apify",
+      "name": "Apify: coletar posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "apify",
+          "name": "Apify Bearer"
+        }
+      },
+      "notes": "Credencial Header Auth: nome Authorization, valor 'Bearer SEU_APIFY_TOKEN'."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o retorno da Apify e calcula o score de engajamento.\n//\n// score bruto = curtidas + comentarios * 3\n// score final = bruto dividido pela MEDIANA do próprio perfil.\n//\n// A normalização pela mediana é o que permite comparar um perfil de 50 mil\n// seguidores com um de 3 mil: o que interessa é o post ter ido melhor que o\n// normal daquele perfil, não o número absoluto.\n\nconst posts = items\n  .map((i) => i.json)\n  .filter((p) => p && (p.url || p.postUrl));\n\nfunction tipoDoPost(p) {\n  const t = String(p.type || p.productType || '').toLowerCase();\n  if (t.includes('video') || t.includes('reel') || t.includes('clips')) return 'reel';\n  if (t.includes('sidecar') || t.includes('carousel')) return 'carrossel';\n  return 'imagem';\n}\n\nfunction mediana(numeros) {\n  if (numeros.length === 0) return 0;\n  const ordenados = [...numeros].sort((a, b) => a - b);\n  const meio = Math.floor(ordenados.length / 2);\n  return ordenados.length % 2\n    ? ordenados[meio]\n    : (ordenados[meio - 1] + ordenados[meio]) / 2;\n}\n\nconst normalizados = posts.map((p) => {\n  const curtidas = Number(p.likesCount ?? 0);\n  const comentarios = Number(p.commentsCount ?? 0);\n  return {\n    perfil: '@' + String(p.ownerUsername || p.username || 'desconhecido'),\n    url: String(p.url || p.postUrl),\n    legenda: p.caption ? String(p.caption) : null,\n    curtidas: curtidas < 0 ? 0 : curtidas,\n    comentarios: comentarios < 0 ? 0 : comentarios,\n    bruto: Math.max(0, curtidas) + Math.max(0, comentarios) * 3,\n    publicado_em: p.timestamp ? new Date(p.timestamp).toISOString() : null,\n    tipo: tipoDoPost(p),\n  };\n});\n\n// Mediana por perfil.\nconst porPerfil = {};\nfor (const p of normalizados) {\n  (porPerfil[p.perfil] = porPerfil[p.perfil] || []).push(p.bruto);\n}\nconst medianas = {};\nfor (const perfil of Object.keys(porPerfil)) {\n  medianas[perfil] = mediana(porPerfil[perfil]);\n}\n\nreturn normalizados.map((p) => {\n  const base = medianas[p.perfil];\n  // Perfil sem histórico útil (mediana zero) fica com o bruto, sem dividir\n  // por zero e sem inventar um score alto.\n  const score = base > 0 ? p.bruto / base : 0;\n  return {\n    json: {\n      perfil: p.perfil,\n      url: p.url,\n      legenda: p.legenda,\n      curtidas: p.curtidas,\n      comentarios: p.comentarios,\n      score_engajamento: Number(score.toFixed(4)),\n      publicado_em: p.publicado_em,\n      tipo: p.tipo,\n    },\n  };\n});"
+      },
+      "id": "coleta-normalizar",
+      "name": "Normalizar e pontuar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/referencias",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($input.all().map(i => i.json)) }}",
+        "options": {}
+      },
+      "id": "coleta-gravar",
+      "name": "Supabase: gravar referências",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "executeOnce": true,
+      "notes": "O índice único em referencias.url + 'resolution=ignore-duplicates' faz a recoleta diária ignorar o que já existe."
+    }
+  ],
+  "connections": {
+    "Todo dia às 3h": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Apify: coletar posts", "type": "main", "index": 0 }]]
+    },
+    "Apify: coletar posts": {
+      "main": [[{ "node": "Normalizar e pontuar", "type": "main", "index": 0 }]]
+    },
+    "Normalizar e pontuar": {
+      "main": [[{ "node": "Supabase: gravar referências", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {}
+}
