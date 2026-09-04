@@ -69,7 +69,10 @@ function escala(tipo: string) {
       tituloEntrelinha: 1.06,
       corpoTamanho: 31,
       corpoLinhas: 3,
-      veuTopo: 0.42,
+      // O véu escurece de cima para baixo. No topo fica leve, para a foto
+      // aparecer e a peça ter credibilidade; embaixo fecha, porque é onde
+      // o texto precisa de contraste.
+      veuTopo: 0.28,
       veuBase: 0.95,
     };
   }
@@ -80,7 +83,7 @@ function escala(tipo: string) {
     tituloEntrelinha: 1.14,
     corpoTamanho: 30,
     corpoLinhas: 5,
-    veuTopo: 0.36,
+    veuTopo: 0.26,
     veuBase: 0.93,
   };
 }

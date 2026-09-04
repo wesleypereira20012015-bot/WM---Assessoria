@@ -44,7 +44,7 @@ const EXEMPLO: Card[] = [
     tipo: "capa",
     titulo: "Sua obra pode estar pagando INSS a mais",
     corpo: "O que quase todo construtor descobre tarde demais sobre a aferição da Receita Federal.",
-    busca_foto: "construction site building facade brazil",
+    busca_foto: "construction site concrete building under construction crane",
   },
   {
     ordem: 2,
@@ -52,14 +52,14 @@ const EXEMPLO: Card[] = [
     titulo: "A Receita calcula por estimativa",
     corpo:
       "Sem a documentação certa, o cálculo do INSS da obra sai por área construída, e quase sempre acima do que a obra realmente deve.",
-    busca_foto: "architect blueprint desk documents",
+    busca_foto: "worried man calculating bills debt stress paperwork",
   },
   {
     ordem: 3,
     tipo: "conteudo",
     titulo: "Nota fiscal de material e de mão de obra derruba a base de cálculo da aferição",
     corpo: "Cada documento aceito pela Receita reduz o valor que a obra vai pagar.",
-    busca_foto: "invoice paperwork office desk",
+    busca_foto: "tax forms money calculator invoice on desk",
   },
   {
     ordem: 4,
@@ -67,14 +67,14 @@ const EXEMPLO: Card[] = [
     titulo: "CNO em dia — a porta de entrada",
     corpo:
       "Sem o Cadastro Nacional de Obras regular, não sai CND. E sem CND, não sai habite-se nem financiamento.",
-    busca_foto: "city hall building documents approval",
+    busca_foto: "stack of documents paperwork bureaucracy office folders",
   },
   {
     ordem: 5,
     tipo: "fechamento",
     titulo: "Antes de pagar, mande revisar",
     corpo: "A WM Assessoria revisa o cálculo da sua obra e mostra quanto dá para reduzir.",
-    busca_foto: "professional consultant meeting handshake office",
+    busca_foto: "engineer with helmet reviewing construction plans on site",
   },
 ];
 
@@ -115,6 +115,18 @@ async function main(): Promise<void> {
     unsplash: process.env.UNSPLASH_ACCESS_KEY,
   };
   const comChave = Boolean(chaves.pexels || chaves.unsplash);
+  const semChaveDeProposito = process.env.ARTE_SEM_CHAVE === "1";
+
+  if (!comChave && !semChaveDeProposito) {
+    console.error("Sem PEXELS_API_KEY e sem UNSPLASH_ACCESS_KEY.\n");
+    console.error("A arte da WM usa foto real, então o teste se comporta como a produção");
+    console.error("e não renderiza sem uma das duas chaves. A do Pexels é gratuita:");
+    console.error("  https://www.pexels.com/api/\n");
+    console.error("Depois rode:  PEXELS_API_KEY=sua-chave npm run arte\n");
+    console.error("Só para mexer em composição, sem julgar a foto, dá para usar as");
+    console.error("imagens do próprio repositório:  ARTE_SEM_CHAVE=1 npm run arte");
+    process.exit(1);
+  }
 
   console.log("Fontes carregadas:");
   console.log(`  título   ${fontesDaMarca.titulo.familia}`);
@@ -125,9 +137,10 @@ async function main(): Promise<void> {
   if (comChave) {
     console.log("Buscando foto real em Pexels/Unsplash.\n");
   } else {
-    console.log("ATENÇÃO: sem PEXELS_API_KEY e sem UNSPLASH_ACCESS_KEY.");
-    console.log("Usando fotos locais do repositório só para julgar a composição.");
-    console.log("Em produção a função exige foto de Pexels ou Unsplash e falha sem elas.\n");
+    console.log("ARTE_SEM_CHAVE=1: usando imagens do repositório como tapa-buraco.");
+    console.log("Serve para conferir espaçamento e quebra de linha, NÃO para julgar a");
+    console.log("foto. A arte de verdade usa foto de obra, imposto ou dinheiro, buscada");
+    console.log("no Pexels pelo termo de cada prancha.\n");
   }
 
   const wasm = await readFile(

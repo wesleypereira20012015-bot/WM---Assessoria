@@ -8,7 +8,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *   painel /admin ler os leads. Nunca deve chegar ao navegador.
  */
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// A Área do Criador e o n8n usam SUPABASE_URL (sem prefixo); o site já
+// estava no ar com NEXT_PUBLIC_SUPABASE_URL. Aceitamos as duas para não
+// obrigar a recadastrar variável na Vercel.
+const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
