@@ -1,0 +1,359 @@
+{
+  "name": "WM · Publicação no Instagram",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "pub-gatilho",
+      "name": "De hora em hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1320, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "url",
+              "name": "supabase_url",
+              "value": "https://SEU-PROJETO.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "ig",
+              "name": "ig_user_id",
+              "value": "SEU_IG_USER_ID",
+              "type": "string"
+            },
+            {
+              "id": "graph",
+              "name": "graph_version",
+              "value": "v21.0",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pub-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1100, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,legenda,hashtags,assets(ordem,url_publica)" },
+            { "name": "status", "value": "eq.agendada" },
+            { "name": "agendada_para", "value": "=lte.{{ new Date().toISOString() }}" },
+            { "name": "order", "value": "agendada_para.asc" },
+            { "name": "limit", "value": "5" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pub-buscar",
+      "name": "Supabase: agendadas que já venceram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-880, 300],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Só status agendada. Como o banco recusa agendada sem aprovada_em, nada chega aqui sem aprovação humana registrada."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma linha por prancha, na ordem, para criar os containers filhos.\n// Publicação sem arte nenhuma nunca deve chegar aqui; se chegar, é erro\n// e vai para a trilha de erro em vez de virar um post quebrado.\nconst saida = [];\n\nfor (const item of items) {\n  const lista = Array.isArray(item.json) ? item.json : [item.json];\n  for (const p of lista) {\n    if (!p || !p.id) continue;\n    const assets = (p.assets || []).slice().sort((a, b) => a.ordem - b.ordem);\n    const legenda = [p.legenda || '', (p.hashtags || []).join(' ')]\n      .filter(Boolean)\n      .join('\\n\\n')\n      .slice(0, 2200);\n\n    if (assets.length < 2 || assets.length > 10) {\n      saida.push({\n        json: {\n          falha: true,\n          publicacao_id: p.id,\n          erro: 'Carrossel com ' + assets.length + ' imagens; o Instagram aceita de 2 a 10.',\n        },\n      });\n      continue;\n    }\n\n    for (const a of assets) {\n      saida.push({\n        json: {\n          falha: false,\n          publicacao_id: p.id,\n          ordem: a.ordem,\n          total: assets.length,\n          url_publica: a.url_publica,\n          legenda,\n        },\n      });\n    }\n  }\n}\n\nreturn saida;"
+      },
+      "id": "pub-explodir",
+      "name": "Uma linha por prancha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.falha }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pub-se-valida",
+      "name": "Prancha utilizável?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.graph_version }}/{{ $('Config').first().json.ig_user_id }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "is_carousel_item", "value": "true" },
+            { "name": "image_url", "value": "={{ $json.url_publica }}" }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "pub-filho",
+      "name": "Instagram: container da imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-220, 200],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "instagram-bearer",
+          "name": "Instagram Bearer"
+        }
+      },
+      "notes": "O Instagram baixa a imagem da URL pública do Storage. Credencial Header Auth: Authorization = 'Bearer SEU_IG_ACCESS_TOKEN'. Sem retry: falha vira status erro, não fica tentando para sempre."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta os filhos por publicação, na ordem, e monta o container do\n// carrossel. Publicação que perdeu qualquer filho vira erro: melhor não\n// publicar do que publicar um carrossel faltando prancha.\nconst entradas = $('Uma linha por prancha').all()\n  .map((i) => i.json)\n  .filter((j) => !j.falha);\n\nconst criados = items.map((i) => i.json);\n\nconst porPublicacao = {};\nentradas.forEach((entrada, indice) => {\n  const grupo = (porPublicacao[entrada.publicacao_id] = porPublicacao[entrada.publicacao_id] || {\n    publicacao_id: entrada.publicacao_id,\n    total: entrada.total,\n    legenda: entrada.legenda,\n    filhos: [],\n  });\n  const resposta = criados[indice];\n  if (resposta && resposta.id) grupo.filhos.push({ ordem: entrada.ordem, id: resposta.id });\n});\n\nreturn Object.values(porPublicacao).map((g) => {\n  const completo = g.filhos.length === g.total;\n  return {\n    json: completo\n      ? {\n          falha: false,\n          publicacao_id: g.publicacao_id,\n          legenda: g.legenda,\n          children: g.filhos.sort((a, b) => a.ordem - b.ordem).map((f) => f.id).join(','),\n        }\n      : {\n          falha: true,\n          publicacao_id: g.publicacao_id,\n          erro: 'Só ' + g.filhos.length + ' de ' + g.total + ' imagens foram aceitas pelo Instagram.',\n        },\n  };\n});"
+      },
+      "id": "pub-agrupar",
+      "name": "Agrupar filhos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "version": 2 },
+          "conditions": [
+            {
+              "id": "completo",
+              "leftValue": "={{ $json.falha }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "false", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pub-se-completo",
+      "name": "Carrossel completo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.graph_version }}/{{ $('Config').first().json.ig_user_id }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "media_type", "value": "CAROUSEL" },
+            { "name": "children", "value": "={{ $json.children }}" },
+            { "name": "caption", "value": "={{ $json.legenda }}" }
+          ]
+        },
+        "options": { "timeout": 60000 }
+      },
+      "id": "pub-carrossel",
+      "name": "Instagram: container do carrossel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 120],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpHeaderAuth": { "id": "instagram-bearer", "name": "Instagram Bearer" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.graph_version }}/{{ $('Config').first().json.ig_user_id }}/media_publish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "creation_id", "value": "={{ $json.id }}" }]
+        },
+        "options": { "timeout": 60000 }
+      },
+      "id": "pub-publicar",
+      "name": "Instagram: publicar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 120],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpHeaderAuth": { "id": "instagram-bearer", "name": "Instagram Bearer" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $('Carrossel completo?').item.json.publicacao_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "return=minimal" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'publicada', ig_media_id: String($json.id), publicada_em: new Date().toISOString(), erro_detalhe: null }) }}",
+        "options": {}
+      },
+      "id": "pub-marcar",
+      "name": "Supabase: marcar publicada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta tudo que deu errado, venha de onde vier, num formato só.\n// O motivo fica visível no calendário da Área do Criador.\nfunction motivo(j) {\n  if (j && j.erro) return String(j.erro);\n  if (j && j.error) {\n    if (typeof j.error === 'string') return j.error;\n    const e = j.error.error || j.error;\n    return String(e.message || JSON.stringify(e)).slice(0, 900);\n  }\n  return 'Falha sem detalhe do Instagram.';\n}\n\nfunction idDaPublicacao(item) {\n  const j = item.json || {};\n  if (j.publicacao_id) return j.publicacao_id;\n  // Nó de erro do n8n guarda o item que entrou.\n  const origem = (item.pairedItem && item.json && item.json.publicacao_id) || null;\n  return origem;\n}\n\nreturn items\n  .map((item) => ({\n    json: {\n      publicacao_id: idDaPublicacao(item),\n      erro_detalhe: motivo(item.json),\n    },\n  }))\n  .filter((i) => i.json.publicacao_id);"
+      },
+      "id": "pub-erro-montar",
+      "name": "Montar erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 460]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "id", "value": "=eq.{{ $json.publicacao_id }}" }]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "return=minimal" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'erro', erro_detalhe: $json.erro_detalhe }) }}",
+        "options": {}
+      },
+      "id": "pub-marcar-erro",
+      "name": "Supabase: marcar erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 460],
+      "notes": "Status erro com o motivo preenchido, e o fluxo para. Sem retry infinito: na próxima hora ela não é mais pega, porque não está mais agendada."
+    }
+  ],
+  "connections": {
+    "De hora em hora": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": {
+      "main": [[{ "node": "Supabase: agendadas que já venceram", "type": "main", "index": 0 }]]
+    },
+    "Supabase: agendadas que já venceram": {
+      "main": [[{ "node": "Uma linha por prancha", "type": "main", "index": 0 }]]
+    },
+    "Uma linha por prancha": {
+      "main": [[{ "node": "Prancha utilizável?", "type": "main", "index": 0 }]]
+    },
+    "Prancha utilizável?": {
+      "main": [
+        [{ "node": "Instagram: container da imagem", "type": "main", "index": 0 }],
+        [{ "node": "Montar erro", "type": "main", "index": 0 }]
+      ]
+    },
+    "Instagram: container da imagem": {
+      "main": [
+        [{ "node": "Agrupar filhos", "type": "main", "index": 0 }],
+        [{ "node": "Montar erro", "type": "main", "index": 0 }]
+      ]
+    },
+    "Agrupar filhos": {
+      "main": [[{ "node": "Carrossel completo?", "type": "main", "index": 0 }]]
+    },
+    "Carrossel completo?": {
+      "main": [
+        [{ "node": "Instagram: container do carrossel", "type": "main", "index": 0 }],
+        [{ "node": "Montar erro", "type": "main", "index": 0 }]
+      ]
+    },
+    "Instagram: container do carrossel": {
+      "main": [
+        [{ "node": "Instagram: publicar", "type": "main", "index": 0 }],
+        [{ "node": "Montar erro", "type": "main", "index": 0 }]
+      ]
+    },
+    "Instagram: publicar": {
+      "main": [
+        [{ "node": "Supabase: marcar publicada", "type": "main", "index": 0 }],
+        [{ "node": "Montar erro", "type": "main", "index": 0 }]
+      ]
+    },
+    "Montar erro": {
+      "main": [[{ "node": "Supabase: marcar erro", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {}
+}

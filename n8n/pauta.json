@@ -1,0 +1,358 @@
+{
+  "name": "WM · Pauta da semana",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "pauta-gatilho",
+      "name": "Segunda às 9h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1320, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "url",
+              "name": "supabase_url",
+              "value": "https://SEU-PROJETO.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "qtd",
+              "name": "publicacoes_por_semana",
+              "value": 4,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pauta-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1100, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.supabase_url }}/rest/v1/referencias",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "perfil,url,legenda,curtidas,comentarios,score_engajamento,tipo,publicado_em"
+            },
+            {
+              "name": "publicado_em",
+              "value": "=gte.{{ new Date(Date.now() - 30*24*60*60*1000).toISOString() }}"
+            },
+            {
+              "name": "order",
+              "value": "score_engajamento.desc"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pauta-referencias",
+      "name": "Supabase: 10 melhores referências",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-880, 300],
+      "executeOnce": true,
+      "notes": "Só as 10 melhores dos últimos 30 dias. Nunca o dump inteiro da Apify: isso é o que segura o custo da chamada ao Claude."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/ideias",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "id,titulo,descricao,prioridade" },
+            { "name": "status", "value": "eq.nova" },
+            { "name": "order", "value": "prioridade.desc,criado_em.asc" },
+            { "name": "limit", "value": "20" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pauta-ideias",
+      "name": "Supabase: ideias novas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-660, 300],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "select", "value": "titulo_interno" },
+            { "name": "order", "value": "criado_em.desc" },
+            { "name": "limit", "value": "40" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pauta-historico",
+      "name": "Supabase: histórico de temas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-440, 300],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "notes": "Só os títulos, para o Claude não repetir tema. Mandar as publicações inteiras seria desperdício de token."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta a entrada da chamada ao Claude, já enxuta.\n//\n// Economia de token, que é onde o custo se repete todo mês:\n//  - só as 10 melhores referências, com legenda cortada em 400 caracteres\n//  - do histórico, só os títulos\n//  - uma única chamada gera as 4 publicações da semana\n\nconst CORTE_LEGENDA = 400;\n\nfunction lista(nome) {\n  try {\n    return $(nome).all().map((i) => i.json).filter((j) => j && Object.keys(j).length);\n  } catch (e) {\n    return [];\n  }\n}\n\nconst referencias = lista('Supabase: 10 melhores referências').map((r) => ({\n  perfil: r.perfil,\n  tipo: r.tipo,\n  score: Number(r.score_engajamento || 0).toFixed(2),\n  legenda: (r.legenda || '').replace(/\\s+/g, ' ').slice(0, CORTE_LEGENDA),\n}));\n\nconst ideias = lista('Supabase: ideias novas').map((i) => ({\n  id: i.id,\n  titulo: i.titulo,\n  detalhe: i.descricao || undefined,\n}));\n\nconst jaFeitos = lista('Supabase: histórico de temas')\n  .map((p) => p.titulo_interno)\n  .filter(Boolean);\n\nreturn [{\n  json: {\n    quantidade: $('Config').first().json.publicacoes_por_semana,\n    referencias,\n    ideias,\n    ja_feitos: jaFeitos,\n  },\n}];"
+      },
+      "id": "pauta-entrada",
+      "name": "Montar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-haiku-4-5',\n  max_tokens: 1200,\n  system: [{\n    type: 'text',\n    text: 'Voce classifica posts de Instagram do setor de regularizacao de obras e INSS. Para cada post, devolva o tema em ate 4 palavras e uma nota de 0 a 10 de quanto o tema serve para uma assessoria de reducao de INSS de obras falar com construtores. Responda SOMENTE com JSON: {\"itens\":[{\"i\":0,\"tema\":\"...\",\"nota\":0}]}. Sem texto antes nem depois.',\n    cache_control: { type: 'ephemeral' }\n  }],\n  messages: [{\n    role: 'user',\n    content: JSON.stringify($json.referencias.map((r, i) => ({ i, legenda: r.legenda })))\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "pauta-haiku",
+      "name": "Claude Haiku: classificar temas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 300],
+      "notes": "Passo mecânico, então roda no modelo barato. O bloco fixo vai com cache ligado porque se repete em toda chamada."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n  const entrada = $('Montar entrada').first().json;\n  let temas = [];\n  try {\n    temas = JSON.parse($json.content[0].text).itens || [];\n  } catch (e) { temas = []; }\n\n  const referencias = entrada.referencias.map((r, i) => ({\n    perfil: r.perfil,\n    tipo: r.tipo,\n    score: r.score,\n    tema: (temas.find(t => t.i === i) || {}).tema || null,\n    nota: (temas.find(t => t.i === i) || {}).nota || null,\n    legenda: r.legenda\n  }));\n\n  const MARCA = [\n    'Voce escreve o conteudo de Instagram da WM Assessoria, que reduz INSS de obras no Brasil.',\n    '',\n    'QUEM LE: construtor, incorporador e dono de obra. Gente pratica, que perde dinheiro por nao saber de prazo e documento. Nao e contador.',\n    '',\n    'COMO ESCREVER:',\n    '- Portugues do Brasil, direto, frases curtas.',\n    '- NUNCA use travessao. Use virgula ou ponto.',\n    '- Nada de emoji, nada de CAIXA ALTA para enfatizar, nada de linguagem de guru.',\n    '- Nao prometa valor de economia nem prazo garantido. Isso e assessoria, nao milagre.',\n    '- Fale de CNO, CND de obra, SERO, afericao indireta e decadencia pelo nome certo.',\n    '',\n    'FORMATO DA PECA: carrossel de 4 a 6 pranchas.',\n    '- capa: uma afirmacao que para o dedo, ate 60 caracteres.',\n    '- conteudo: um argumento por prancha, titulo ate 70 caracteres, corpo ate 150.',\n    '- fechamento: chamada para procurar a WM, sem promessa de resultado.',\n    '- busca_foto: termo EM INGLES para banco de imagem, descrevendo foto REAL de obra,',\n    '  documento, dinheiro, imposto ou pessoa preocupada com conta. Nunca peca ilustracao,',\n    '  render, 3d nem grafico.',\n    '',\n    'RESPONDA SOMENTE COM JSON, sem texto antes nem depois, neste formato:',\n    '{\"publicacoes\":[{\"titulo_interno\":\"...\",\"legenda\":\"...\",\"hashtags\":[\"#...\"],',\n    '\"ideia_id\":null,\"cards\":[{\"ordem\":1,\"tipo\":\"capa\",\"titulo\":\"...\",\"corpo\":\"...\",',\n    '\"busca_foto\":\"...\"}]}]}',\n    '',\n    'ideia_id: preencha com o id da ideia da fila que originou a peca, ou null.',\n    'legenda: ate 1500 caracteres, com quebras de linha.',\n    'hashtags: de 5 a 10, minusculas, comecando com #.'\n  ].join('\\n');\n\n  const pedido = [\n    'Monte ' + entrada.quantidade + ' publicacoes para a proxima semana.',\n    '',\n    'IDEIAS NA FILA (prioridade primeiro, use o id em ideia_id quando aproveitar uma):',\n    JSON.stringify(entrada.ideias),\n    '',\n    'REFERENCIAS QUE FORAM BEM NOS CONCORRENTES (so para se inspirar em angulo, nunca para copiar):',\n    JSON.stringify(referencias),\n    '',\n    'TEMAS QUE A WM JA PUBLICOU (nao repita):',\n    JSON.stringify(entrada.ja_feitos)\n  ].join('\\n');\n\n  return JSON.stringify({\n    model: 'claude-sonnet-4-6',\n    max_tokens: 8000,\n    system: [{ type: 'text', text: MARCA, cache_control: { type: 'ephemeral' } }],\n    messages: [{ role: 'user', content: pedido }]\n  });\n})() }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "pauta-sonnet",
+      "name": "Claude Sonnet: escrever a semana",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "notes": "UMA chamada gera as 4 publicações. O bloco de identidade da marca vem primeiro e com cache, porque é sempre igual."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Confere o que o Claude devolveu antes de gravar qualquer coisa.\n//\n// O modelo pode devolver JSON quebrado, prancha demais ou travessao. Nada\n// disso pode chegar ao banco: o banco recusaria, e o fluxo morreria mais\n// para a frente, com metade da semana gravada.\n\nfunction semTravessao(t) {\n  return String(t == null ? '' : t)\n    .replace(/(\\d)\\s*[\\u2013\\u2014]\\s*(\\d)/g, '$1-$2')\n    .replace(/\\s*[\\u2013\\u2014]\\s*/g, ', ')\n    .replace(/,\\s*,/g, ',')\n    .replace(/\\s+,/g, ',');\n}\n\nconst bruto = $json.content && $json.content[0] && $json.content[0].text;\nif (!bruto) throw new Error('Claude nao devolveu conteudo de texto.');\n\n// Rede de seguranca: se vier cercado de crase ou de texto, pega o JSON.\nconst inicio = bruto.indexOf('{');\nconst fim = bruto.lastIndexOf('}');\nif (inicio < 0 || fim < inicio) throw new Error('Resposta do Claude nao tem JSON: ' + bruto.slice(0, 300));\n\nlet dados;\ntry {\n  dados = JSON.parse(bruto.slice(inicio, fim + 1));\n} catch (e) {\n  throw new Error('JSON invalido do Claude: ' + e.message);\n}\n\nconst publicacoes = Array.isArray(dados.publicacoes) ? dados.publicacoes : [];\nif (publicacoes.length === 0) throw new Error('Claude nao devolveu nenhuma publicacao.');\n\nconst idsValidos = new Set($('Montar entrada').first().json.ideias.map((i) => i.id));\n\nconst saida = publicacoes.map((p, indice) => {\n  const cards = Array.isArray(p.cards) ? p.cards : [];\n  // Limite do proprio Instagram para carrossel.\n  if (cards.length < 2 || cards.length > 10) {\n    throw new Error('Publicacao ' + (indice + 1) + ' veio com ' + cards.length + ' pranchas; o Instagram aceita de 2 a 10.');\n  }\n\n  const cardsLimpos = cards.map((c, i) => {\n    if (!c || !String(c.titulo || '').trim()) {\n      throw new Error('Publicacao ' + (indice + 1) + ', prancha ' + (i + 1) + ' sem titulo.');\n    }\n    if (!String(c.busca_foto || '').trim()) {\n      throw new Error('Publicacao ' + (indice + 1) + ', prancha ' + (i + 1) + ' sem busca_foto; sem isso nao existe foto real.');\n    }\n    return {\n      ordem: i + 1,\n      tipo: c.tipo || (i === 0 ? 'capa' : 'conteudo'),\n      titulo: semTravessao(c.titulo).trim(),\n      corpo: semTravessao(c.corpo).trim(),\n      busca_foto: String(c.busca_foto).trim(),\n    };\n  });\n\n  const hashtags = (Array.isArray(p.hashtags) ? p.hashtags : [])\n    .map((h) => '#' + String(h).replace(/^#+/, '').trim())\n    .filter((h) => h.length > 1)\n    .slice(0, 30);\n\n  return {\n    json: {\n      formato: 'carrossel',\n      titulo_interno: semTravessao(p.titulo_interno || cardsLimpos[0].titulo).slice(0, 200),\n      legenda: semTravessao(p.legenda).slice(0, 2200),\n      hashtags,\n      // So aceita id de ideia que realmente veio da fila.\n      ideia_id: idsValidos.has(p.ideia_id) ? p.ideia_id : null,\n      cards: cardsLimpos,\n      status: 'rascunho',\n    },\n  };\n});\n\nreturn saida;"
+      },
+      "id": "pauta-validar",
+      "name": "Validar resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "return=representation" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "pauta-gravar",
+      "name": "Supabase: gravar rascunho",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300],
+      "notes": "Nasce como rascunho. Só vira aguardando_aprovacao depois que a arte existe."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma linha por prancha, que é como a render-card trabalha.\nconst saida = [];\nfor (const item of items) {\n  // O PostgREST devolve array mesmo inserindo um só.\n  const p = Array.isArray(item.json) ? item.json[0] : item.json;\n  const cards = p.cards || [];\n  for (const card of cards) {\n    saida.push({\n      json: {\n        publicacao_id: p.id,\n        ordem: card.ordem,\n        total: cards.length,\n        card,\n      },\n    });\n  }\n}\nreturn saida;"
+      },
+      "id": "pauta-explodir",
+      "name": "Uma linha por prancha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.supabase_url }}/functions/v1/render-card",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        }
+      },
+      "id": "pauta-render",
+      "name": "render-card: gerar arte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-bearer",
+          "name": "Supabase Service Role Bearer"
+        }
+      },
+      "notes": "Uma prancha por vez, com intervalo, para não estourar o limite do Pexels. Credencial Header Auth: Authorization = 'Bearer SUA_SERVICE_ROLE_KEY'."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta de volta por publicação: só passa adiante a que teve TODAS as\n// pranchas renderizadas. Publicação com arte pela metade continua em\n// rascunho e não aparece para aprovar.\nconst porPublicacao = {};\n\nfor (const item of $('Uma linha por prancha').all()) {\n  const id = item.json.publicacao_id;\n  porPublicacao[id] = porPublicacao[id] || { esperadas: item.json.total, feitas: 0 };\n}\n\nfor (const item of items) {\n  const url = item.json && item.json.url_publica;\n  if (!url) continue;\n  // A URL pública é {publicacao_id}/{ordem}.jpg, então dá para saber de quem é.\n  const achado = url.match(/publicacoes\\/([0-9a-f-]{36})\\//i);\n  if (achado && porPublicacao[achado[1]]) porPublicacao[achado[1]].feitas++;\n}\n\nreturn Object.entries(porPublicacao)\n  .filter(([, c]) => c.feitas >= c.esperadas && c.esperadas > 0)\n  .map(([id]) => ({ json: { id } }));"
+      },
+      "id": "pauta-agrupar",
+      "name": "Só as que ficaram completas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.supabase_url }}/rest/v1/publicacoes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "id", "value": "=eq.{{ $json.id }}" }]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "return=minimal" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'aguardando_aprovacao' }) }}",
+        "options": {}
+      },
+      "id": "pauta-liberar",
+      "name": "Supabase: liberar para aprovação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Segunda às 9h": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": {
+      "main": [[{ "node": "Supabase: 10 melhores referências", "type": "main", "index": 0 }]]
+    },
+    "Supabase: 10 melhores referências": {
+      "main": [[{ "node": "Supabase: ideias novas", "type": "main", "index": 0 }]]
+    },
+    "Supabase: ideias novas": {
+      "main": [[{ "node": "Supabase: histórico de temas", "type": "main", "index": 0 }]]
+    },
+    "Supabase: histórico de temas": {
+      "main": [[{ "node": "Montar entrada", "type": "main", "index": 0 }]]
+    },
+    "Montar entrada": {
+      "main": [[{ "node": "Claude Haiku: classificar temas", "type": "main", "index": 0 }]]
+    },
+    "Claude Haiku: classificar temas": {
+      "main": [[{ "node": "Claude Sonnet: escrever a semana", "type": "main", "index": 0 }]]
+    },
+    "Claude Sonnet: escrever a semana": {
+      "main": [[{ "node": "Validar resposta", "type": "main", "index": 0 }]]
+    },
+    "Validar resposta": {
+      "main": [[{ "node": "Supabase: gravar rascunho", "type": "main", "index": 0 }]]
+    },
+    "Supabase: gravar rascunho": {
+      "main": [[{ "node": "Uma linha por prancha", "type": "main", "index": 0 }]]
+    },
+    "Uma linha por prancha": {
+      "main": [[{ "node": "render-card: gerar arte", "type": "main", "index": 0 }]]
+    },
+    "render-card: gerar arte": {
+      "main": [[{ "node": "Só as que ficaram completas", "type": "main", "index": 0 }]]
+    },
+    "Só as que ficaram completas": {
+      "main": [[{ "node": "Supabase: liberar para aprovação", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {}
+}
