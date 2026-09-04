@@ -121,16 +121,27 @@ delete from public.referencias where url like 'https://instagram.com/p/exemplo-%
 
 ## Pendências que encontrei
 
-**Nenhum lead foi salvo. Nunca.** As duas tabelas de leads do projeto,
-`public.leads` e `disparo.leads`, estão com **zero linhas**. Isso não é efeito
-da pausa: uma pausa não apaga dados. O mais provável é que as variáveis do
-Supabase nunca tenham sido configuradas na Vercel, e o código então caiu no
-plano B de `lib/db.ts`, que grava num arquivo local. Na Vercel esse arquivo é
-descartado a cada deploy, então todo contato da calculadora foi perdido.
+**Nenhum lead foi salvo, e o banco não é o culpado.** As duas tabelas de
+leads, `public.leads` e `disparo.leads`, estão com zero linhas.
+
+O banco foi auditado de ponta a ponta e está correto: a coluna `id` é
+identity, a policy de RLS libera inserção de visitante com as validações
+certas, e um lead inserido como `anon` entrou sem erro (o teste foi feito e
+depois removido). O `pg_net` está instalado e a Edge Function de WhatsApp
+está ativa.
+
+Sobra, então, a configuração da Vercel. Sem `NEXT_PUBLIC_SUPABASE_URL` e
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, o `lib/db.ts` cai no plano B e grava
+num arquivo local, que a Vercel descarta a cada deploy. Todo contato da
+calculadora teria se perdido assim.
+
+Um detalhe que reforça isso: a sequência de `id` da tabela já tinha chegado a
+4 antes do meu teste. Alguma coisa tentou gravar quatro vezes. Ou foram
+gravadas e apagadas depois, ou foram tentativas que falharam.
 
 Verifique isso antes de qualquer outra coisa desta lista. É o item mais caro:
 enquanto ficar assim, cada visitante que preenche o formulário vira nada. O
-passo 1 acima resolve, porque é ele que finalmente liga o site ao banco.
+passo 1 acima resolve.
 
 Como conferir depois: preencha o formulário do site você mesmo e veja se ele
 aparece em `/admin`.
@@ -139,14 +150,19 @@ aparece em `/admin`.
 Enquanto esteve pausado, o site também não conseguiria salvar nada, nem se as
 variáveis estivessem certas.
 
-**Uma função antiga está exposta.** `public.notificar_novo_lead_whatsapp()` é
-`SECURITY DEFINER` e pode ser chamada por qualquer visitante via
-`/rest/v1/rpc/`. Na prática, um estranho consegue disparar sua notificação de
-WhatsApp. É anterior a este trabalho e não foi alterada. Corrigir é rápido:
+**Função exposta: já corrigido.** `public.notificar_novo_lead_whatsapp()` é
+`SECURITY DEFINER` e estava chamável por qualquer visitante via
+`/rest/v1/rpc/`, o que deixava um estranho disparar sua notificação de
+WhatsApp. O `EXECUTE` foi revogado de `anon`, `authenticated` e `PUBLIC`
+(migration `20260904180000_fecha_rpc_notificar_lead.sql`).
 
-```sql
-revoke execute on function public.notificar_novo_lead_whatsapp() from anon, authenticated;
-```
+Antes de aplicar, testei se revogar quebraria a captura de leads, montando
+uma tabela e uma função descartáveis: o trigger continuou disparando com o
+`EXECUTE` revogado. Depois de aplicar, inseri um lead de teste como `anon` e
+ele entrou normalmente. Os dois testes foram removidos. As duas advertências
+de segurança do Supabase sumiram.
 
-Só rode isso se a função for chamada por trigger (que é o uso normal). Se algo
-no site a chamar por RPC, isso quebraria essa chamada.
+**Ainda em aberto, de menor gravidade:** a chave publishable do projeto está
+escrita em texto puro dentro do corpo dessa função. Essa chave é pública por
+natureza, então não é vazamento, mas se um dia você rotacionar as chaves do
+Supabase vai precisar lembrar de reescrever a função também.
