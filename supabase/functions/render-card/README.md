@@ -103,7 +103,8 @@ exatamente o mesmo código que roda em produção.
 O resvg não usa fonte do sistema aqui: as fontes precisam chegar como bytes.
 Ler arquivo estático no deploy exigiria `static_files` no `config.toml`, CLI
 2.7+ e Docker. Embutidas num módulo TypeScript, funcionam em qualquer caminho
-de deploy e sem nenhuma chamada de rede no cold start. As fontes vêm da API
+de deploy e sem depender de rede para carregar. (O binário Wasm do resvg, esse
+sim, é buscado de um CDN uma vez por cold start.) As fontes vêm da API
 do Google Fonts já subsetadas para o alfabeto da arte, o que segura o arquivo
 em cerca de 250 KB. Cormorant Garamond e Inter são licenciadas sob a SIL Open
 Font License, que permite essa redistribuição (veja `OFL.txt`).
