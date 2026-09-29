@@ -5,6 +5,11 @@ out/
 .env*.local
 .data/
 .DS_Store
+
+# Relatórios do Guia da Construção baixados pelo n8n. Contêm nomes e
+# telefones de terceiros — nunca versionar.
+n8n/arquivos/*
+!n8n/arquivos/.gitkeep
 *.tsbuildinfo
 next-env.d.ts
 _versao-antiga/

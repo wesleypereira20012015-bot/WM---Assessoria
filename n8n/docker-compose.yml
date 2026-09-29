@@ -1,0 +1,138 @@
+# ============================================================
+# n8n self-hospedado — automação de disparo da WM Assessoria
+# ============================================================
+# Três serviços:
+#   caddy    → HTTPS automático (Let's Encrypt). Necessário porque a Z-API
+#              só entrega webhook em endpoint público com certificado válido.
+#   n8n      → o editor e o motor de execução dos workflows.
+#   postgres → estado do n8n (workflows, credenciais, execuções).
+#
+# O Postgres daqui guarda o n8n em si. Os dados de negócio (schema
+# `disparo`) continuam no Supabase — são bancos diferentes, de propósito:
+# perder este VPS não pode significar perder os leads.
+#
+# Subir:  docker compose up -d
+# Logs:   docker compose logs -f n8n
+# ============================================================
+
+name: wm-n8n
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-n8n}
+      POSTGRES_USER: ${POSTGRES_USER:-n8n}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Sem `ports:` — o banco só é alcançável pela rede interna do compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  n8n:
+    # Registro próprio do n8n, para não depender do limite de pulls do
+    # Docker Hub. Se estiver inacessível, o espelho oficial serve:
+    # image: n8nio/n8n:latest
+    # Fixe a versão depois da primeira subida — veja o README.
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # ---------- Banco de estado ----------
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-n8n}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+
+      # ---------- Chave de criptografia ----------
+      # Criptografa TODAS as credenciais salvas (Gmail, Z-API, Supabase,
+      # Anthropic). Se mudar ou se perder, as credenciais viram lixo
+      # ilegível e têm de ser recadastradas uma por uma. Guarde fora do VPS.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?gere com "openssl rand -hex 32" e guarde em local seguro}
+
+      # ---------- Endereço público ----------
+      # WEBHOOK_URL é o que a Z-API vai chamar e o que aparece no nó Webhook
+      # do Fluxo B. Precisa ser o domínio real, não localhost.
+      N8N_HOST: ${N8N_HOST:?defina o dominio, ex. n8n.wmassessoria.com.br}
+      N8N_PROTOCOL: https
+      N8N_PORT: 5678
+      # O n8n 2.x escuta em "::" (IPv6) por padrão. A rede bridge do
+      # Docker normalmente não tem IPv6, e aí o processo morre repetindo
+      # "n8n's address '::' is not available" — crash loop na subida.
+      # O Caddy alcança o n8n por IPv4 na rede interna do compose.
+      N8N_LISTEN_ADDRESS: 0.0.0.0
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      N8N_PROXY_HOPS: 1          # está atrás do Caddy
+
+      # ---------- Fuso horário ----------
+      # A saudação por horário e os agendamentos dependem disto. Sem
+      # configurar, o n8n assume UTC e manda "bom dia" às 21h.
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      TZ: America/Sao_Paulo
+
+      # ---------- Execução ----------
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"   # nós Code leem process.env
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 336            # 14 dias de histórico
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 10000
+
+      # ---------- Higiene ----------
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+
+      # ---------- Variáveis lidas pelos workflows ----------
+      # Estas quatro substituem as Variables ($vars) da edição Cloud, que
+      # não existem na Community. Os workflows as leem como $env.NOME.
+      # Se ficarem vazias, a URL da Z-API sai inválida e os envios falham
+      # em silêncio, porque os nós HTTP usam neverError.
+      ZAPI_INSTANCE: ${ZAPI_INSTANCE:?a instancia da Z-API — sem ela nenhum envio funciona}
+      ZAPI_TOKEN: ${ZAPI_TOKEN:?o token da instancia Z-API}
+      # Quem recebe o aviso de lead qualificado. CANAL_NOTIFICACAO tem
+      # precedência; NUMERO_2 é o fallback (o especialista humano).
+      CANAL_NOTIFICACAO: ${CANAL_NOTIFICACAO:-}
+      NUMERO_2: ${NUMERO_2:-}
+      #
+      # NÃO vão aqui, de propósito:
+      #  - Client-Token da Z-API → credencial "Header Auth" do n8n.
+      #  - conexão do Supabase   → credencial "Postgres" do n8n.
+      #  - TEST_MODE, MAX_DIA e afins → tabela disparo.config, para mudar
+      #    sem reiniciar o container.
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Relatórios PDF baixados do Gmail, se precisar inspecionar um parse.
+      - ./arquivos:/data/arquivos
+    # Sem `ports:` — quem expõe para a internet é o Caddy.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - n8n
+    ports:
+      - "80:80"     # necessário para o desafio HTTP do Let's Encrypt
+      - "443:443"
+    environment:
+      N8N_HOST: ${N8N_HOST:?defina o dominio}
+      ACME_EMAIL: ${ACME_EMAIL:?defina um e-mail para avisos de expiracao do certificado}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # guarda os certificados — não apague
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  n8n_data:
+  caddy_data:
+  caddy_config:

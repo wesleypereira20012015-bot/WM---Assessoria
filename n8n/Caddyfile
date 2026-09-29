@@ -1,0 +1,42 @@
+# ============================================================
+# Caddy — HTTPS automático na frente do n8n
+# ============================================================
+# A Z-API só entrega webhook em endpoint público com certificado válido,
+# então o n8n não pode ficar apenas em localhost. O Caddy resolve o
+# certificado com Let's Encrypt sozinho, na primeira subida, e renova
+# depois sem intervenção.
+#
+# Pré-requisito: o DNS de {$N8N_HOST} já precisa apontar para o IP deste
+# servidor ANTES de subir, senão a validação do certificado falha.
+# ============================================================
+{
+	email {$ACME_EMAIL}
+}
+
+{$N8N_HOST} {
+	encode zstd gzip
+
+	# O WebSocket do editor (execuções ao vivo) já é repassado por padrão.
+	# X-Forwarded-For também — o n8n o lê com N8N_PROXY_HOPS=1 para
+	# registrar o IP real de quem acessa, e não o do container do Caddy.
+	reverse_proxy n8n:5678 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	# O n8n tem login próprio, mas o editor não deve ser indexado nem
+	# embutido em iframe de terceiros.
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
