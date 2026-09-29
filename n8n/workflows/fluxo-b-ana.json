@@ -237,7 +237,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "url": "=https://api.z-api.io/instances/{{ $env.ZAPI_INSTANCE }}/token/{{ $env.ZAPI_TOKEN }}/send-text",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -314,13 +314,13 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "url": "=https://api.z-api.io/instances/{{ $env.ZAPI_INSTANCE }}/token/{{ $env.ZAPI_TOKEN }}/send-text",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ phone: $('Preparar Resposta e SQL').first().json.test_mode ? $('Preparar Resposta e SQL').first().json.numero_teste : ($vars.CANAL_NOTIFICACAO || $vars.NUMERO_2), message: $('Preparar Resposta e SQL').first().json.resumo_interno }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $('Preparar Resposta e SQL').first().json.test_mode ? $('Preparar Resposta e SQL').first().json.numero_teste : ($env.CANAL_NOTIFICACAO || $env.NUMERO_2), message: $('Preparar Resposta e SQL').first().json.resumo_interno }) }}",
         "options": {
           "response": {
             "response": {
@@ -375,7 +375,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "url": "=https://api.z-api.io/instances/{{ $env.ZAPI_INSTANCE }}/token/{{ $env.ZAPI_TOKEN }}/send-text",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

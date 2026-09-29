@@ -234,7 +234,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "url": "=https://api.z-api.io/instances/{{ $env.ZAPI_INSTANCE }}/token/{{ $env.ZAPI_TOKEN }}/send-text",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
