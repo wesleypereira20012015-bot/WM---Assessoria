@@ -1,0 +1,665 @@
+{
+  "name": "WM | Fluxo B - Ana (atendimento e qualificacao)",
+  "nodes": [
+    {
+      "id": "a7f218ff-ad55-4ee5-8c5f-d3e690e5ac79",
+      "name": "Z-API: Mensagem Recebida",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zapi-ana",
+        "responseMode": "onReceived",
+        "options": {
+          "responseCode": {
+            "values": {
+              "responseCode": 200
+            }
+          },
+          "ignoreBots": true
+        }
+      },
+      "webhookId": "1e686156-1eab-47ff-9c38-a686ea7504b3"
+    },
+    {
+      "id": "9d8cec02-cdef-40af-bfc2-62f03277b397",
+      "name": "Normalizar Mensagem Recebida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function q(v) {\n  if (v === null || v === undefined || v === '') return 'null';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\nfunction semAcento(s) {\n  return String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n}\n\nconst bruto = $input.first().json || {};\nconst p = bruto.body ? bruto.body : bruto;\n\nconst fromMe = p.fromMe === true || p.fromMe === 'true';\nconst ehGrupo = p.isGroup === true || p.isGroup === 'true';\nconst ehStatus = p.isStatusReply === true || p.isStatusReply === 'true';\nconst telefone = String(p.phone || p.from || '').replace(/\\D/g, '');\n\nif (fromMe || ehGrupo || ehStatus || !telefone) {\n  console.log('callback ignorado: fromMe=' + fromMe + ' grupo=' + ehGrupo + ' status=' + ehStatus + ' telefone=' + telefone);\n  return [];\n}\n\nlet texto = '';\nif (p.text && p.text.message) texto = String(p.text.message);\nelse if (typeof p.message === 'string') texto = p.message;\nelse if (p.buttonsResponseMessage && p.buttonsResponseMessage.message) texto = String(p.buttonsResponseMessage.message);\nelse if (p.listResponseMessage && p.listResponseMessage.message) texto = String(p.listResponseMessage.message);\n\nlet tipoMidia = '';\nif (!texto) {\n  if (p.audio) tipoMidia = 'audio';\n  else if (p.image) tipoMidia = 'imagem';\n  else if (p.document) tipoMidia = 'documento';\n  else if (p.video) tipoMidia = 'video';\n  else tipoMidia = 'nao identificado';\n  texto = '[o lead enviou ' + tipoMidia + ' em vez de texto]';\n}\n\nconst t = semAcento(texto).trim();\nconst pediuSair = /^(sair|parar|pare|stop|remover|descadastrar|cancelar)\\b/.test(t)\n  || /\\bsair\\b/.test(t)\n  || /(nao|n\\u00e3o)\\s+(quero|desejo)\\s+(mais\\s+)?(receber|nada|contato|mensagens)/.test(t)\n  || /(me\\s+(remove|tire|exclua)|para\\s+de\\s+(mandar|me\\s+mandar)|nao\\s+me\\s+mande)/.test(t);\n\nconst sql = 'with upd as ('\n  + 'update disparo.leads set status = case when status in (' + q('novo') + ', ' + q('enviado') + ') then ' + q('respondeu') + ' else status end, '\n  + 'ultimo_contato = now(), atualizado_em = now() where telefone = ' + q(telefone) + ' returning 1'\n  + '), ins as ('\n  + 'insert into disparo.mensagens (telefone, direcao, conteudo, status) values (' + q(telefone) + ', ' + q('in') + ', ' + q(texto) + ', ' + q('recebida') + ') returning 1'\n  + '), cfg as (select coalesce(jsonb_object_agg(chave, valor), ' + q('{}') + '::jsonb) as config from disparo.config) '\n  + 'select cfg.config, l.telefone as lead_telefone, l.nome, l.nome_cliente, l.papel, l.cidade, l.regiao, l.obras, l.multi_obra, '\n  + 'l.metragem, l.inicio, l.termino, l.estado, l.pf_pj, l.piscina, l.destinacao, l.pre_moldados, l.concreto_usinado, '\n  + 'l.possivel_decadencia, l.receptividade, l.perfil, l.status, '\n  + 'coalesce((select jsonb_agg(jsonb_build_object(' + q('direcao') + ', m.direcao, ' + q('conteudo') + ', m.conteudo, ' + q('em') + ', to_char(m.criado_em at time zone ' + q('America/Sao_Paulo') + ', ' + q('DD/MM HH24:MI') + ')) order by m.criado_em) '\n  + 'from (select * from disparo.mensagens where telefone = ' + q(telefone) + ' order by criado_em desc limit 20) m), ' + q('[]') + '::jsonb) as historico '\n  + 'from cfg left join disparo.leads l on l.telefone = ' + q(telefone) + ';';\n\nreturn [{\n  json: {\n    telefone: telefone,\n    texto: texto,\n    tipo_midia: tipoMidia,\n    nome_whatsapp: p.senderName || p.chatName || '',\n    pediu_sair: pediuSair,\n    recebido_em: $now.setZone('America/Sao_Paulo').toISO(),\n    sql: sql\n  }\n}];"
+      }
+    },
+    {
+      "id": "bfb7320d-41e0-4e0b-8462-97378619ecfd",
+      "name": "Registrar Entrada e Carregar Contexto",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        448,
+        400
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "f85f5147-8294-46cb-b6f8-0c9c297e6147",
+      "name": "Rotear Conversa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const ctx = $input.first().json || {};\nconst msg = $('Normalizar Mensagem Recebida').first().json || {};\nconst cfg = ctx.config || {};\n\nlet rota = 'atender';\nlet motivo = '';\nif (!ctx.lead_telefone) {\n  rota = 'ignorar';\n  motivo = 'telefone nao esta na base de leads';\n} else if (ctx.status === 'optout') {\n  rota = 'ignorar';\n  motivo = 'lead ja pediu optout';\n} else if (ctx.status === 'transferido') {\n  rota = 'ignorar';\n  motivo = 'lead ja transferido para o especialista';\n} else if (msg.pediu_sair) {\n  rota = 'optout';\n  motivo = 'lead pediu para sair';\n}\n\nfunction ou(v, padrao) {\n  const s = v === null || v === undefined ? '' : String(v).trim();\n  return s ? s : padrao;\n}\n\nconst obras = Array.isArray(ctx.obras) ? ctx.obras : [];\nconst linhasObras = obras.map(function (o) {\n  return '- obra ' + ou(o.id_obra, 'sem id') + ': ' + ou(o.endereco, 'endereco nao informado')\n    + ', fase ' + ou(o.fase, 'nao informada') + ', ' + ou(o.metragem, 'metragem nao informada') + ' m2'\n    + ', inicio ' + ou(o.inicio, 'nao informado') + ', termino ' + ou(o.termino, 'nao informado');\n}).join('\\n');\n\nconst historico = Array.isArray(ctx.historico) ? ctx.historico : [];\nconst linhasHistorico = historico.map(function (h) {\n  return (h.direcao === 'out' ? 'Ana' : 'Lead') + ' (' + ou(h.em, '') + '): ' + ou(h.conteudo, '');\n}).join('\\n');\n\nconst coleta = [\n  ['metragem', ctx.metragem],\n  ['inicio', ctx.inicio],\n  ['termino', ctx.termino],\n  ['estado', ctx.estado],\n  ['pf_pj', ctx.pf_pj],\n  ['piscina', ctx.piscina],\n  ['destinacao', ctx.destinacao],\n  ['pre_moldados', ctx.pre_moldados],\n  ['concreto_usinado', ctx.concreto_usinado]\n];\nconst jaTem = coleta.filter(function (c) { return ou(c[1], '') !== ''; }).map(function (c) { return c[0] + '=' + c[1]; });\nconst faltam = coleta.filter(function (c) { return ou(c[1], '') === ''; }).map(function (c) { return c[0]; });\n\nconst contexto = 'DADOS DO LEAD (do relatorio, ja conhecidos)\\n'\n  + 'Nome do contato: ' + ou(ctx.nome, 'nao informado') + '\\n'\n  + 'Cliente no relatorio: ' + ou(ctx.nome_cliente, 'nao informado') + '\\n'\n  + 'Papel na obra: ' + ou(ctx.papel, 'nao informado') + '\\n'\n  + 'Cidade: ' + ou(ctx.cidade, 'nao informada') + ' | Regiao: ' + ou(ctx.regiao, 'nao informada') + '\\n'\n  + 'Metragem: ' + ou(ctx.metragem, 'nao informada') + ' | Inicio: ' + ou(ctx.inicio, 'nao informado') + ' | Termino: ' + ou(ctx.termino, 'nao informado') + '\\n'\n  + 'Obras:\\n' + (linhasObras || '- sem obras registradas') + '\\n\\n'\n  + 'DADOS JA CONFIRMADOS COM O LEAD: ' + (jaTem.length ? jaTem.join(', ') : 'nenhum') + '\\n'\n  + 'AINDA FALTA CONFIRMAR: ' + (faltam.length ? faltam.join(', ') : 'nada, pode encaminhar para o especialista') + '\\n\\n'\n  + 'HISTORICO DA CONVERSA (mais antigo primeiro)\\n' + (linhasHistorico || '- sem mensagens anteriores') + '\\n\\n'\n  + 'MENSAGEM NOVA DO LEAD AGORA:\\n' + ou(msg.texto, '');\n\nreturn [{\n  json: {\n    rota: rota,\n    motivo: motivo,\n    telefone: msg.telefone,\n    texto_lead: msg.texto,\n    nome: ou(ctx.nome, ou(msg.nome_whatsapp, '')),\n    nome_cliente: ctx.nome_cliente,\n    cidade: ctx.cidade,\n    regiao: ctx.regiao,\n    obras: obras,\n    possivel_decadencia: ctx.possivel_decadencia === true,\n    status_atual: ctx.status,\n    faltam: faltam,\n    config: cfg,\n    test_mode: String(cfg.TEST_MODE || 'true').toLowerCase() === 'true',\n    numero_teste: String(cfg.NUMERO_TESTE || '5565999725622').replace(/\\D/g, ''),\n    contexto: contexto\n  }\n}];"
+      }
+    },
+    {
+      "id": "80b8276d-b485-439b-878d-431a4f0f1a37",
+      "name": "Atender, Optout ou Ignorar",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        384
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "atender",
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.rota }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "atender"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "optout",
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.rota }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "optout"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "ignorar",
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.rota }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "ignorar"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cefa10a4-657c-4ac3-ab57-a049e091c5d2",
+      "name": "Ana (atendimento e qualificacao)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.contexto }}",
+        "hasOutputParser": true,
+        "options": {
+          "enableStreaming": false,
+          "maxIterations": 3,
+          "systemMessage": "Você é a Ana, da equipe da WM Assessoria, que cuida de regularização de INSS de obras.\n\nCOMO VOCÊ FALA\nFale como pessoa real brasileira: cordial, próxima e estratégica. Mensagens SEMPRE curtas, estilo WhatsApp, nada de textão, porque o cliente cansa e some. Uma ideia por mensagem e no máximo duas perguntas. Seja persuasiva sem ser insistente.\nNUNCA soe como IA: não use travessão nem hífen separando orações no meio das frases, não use linguagem robótica nem frases genéricas de atendimento automático, nunca diga que é assistente virtual, IA ou \"especialista\".\nVocê entende de verdade do assunto e usa isso para gerar confiança e tirar dúvidas.\n\nO QUE VOCÊ SABE (use com discrição)\nINSS de obra é a contribuição previdenciária sobre a mão de obra da construção. Sem regularizar não sai a CND, e sem CND não dá para averbar a obra na matrícula, tirar habite-se nem liberar financiamento.\nO processo é 100% digital, pelo e-CAC e pelo SERO, o Serviço Eletrônico para Aferição de Obras. A obra precisa estar no CNO, que substituiu a matrícula CEI desde junho de 2021.\nAferição é o cálculo da mão de obra. Pessoa física, ou pessoa jurídica sem contabilidade regular, cai na aferição indireta, que presume pela área e pelo tipo de obra usando CUB e NBR 12.721. Pessoa jurídica com contabilidade regular usa os custos reais.\n\nUSO INTERNO, NUNCA EXPLIQUE AO LEAD (IN RFB 2.021/2021, alterada pela IN RFB 2.212/2024)\nArt. 26 parágrafo 2, pré-moldados e pré-fabricados: redução de 70%, só para componentes estruturais de concreto comprados prontos de terceiro e montados na obra, ou seja vigas, pilares e paredes externas de concreto. Não conta laje pré-moldada, fundação, piso, divisórias internas nem o que a própria construtora fabricou. Exige nota fiscal de aquisição mais instalação do fabricante, e material mais instalação acima de 40% do COD.\nConcreto usinado é item de redução SEPARADO, não é pré-moldado, por isso você pergunta à parte.\nArt. 33, fator de ajuste, vale só para pessoa física e exige DCTFWeb transmitida ao longo da obra.\nDecadência: período com mais de 5 anos pode estar prescrito.\nIsso serve só para você perguntar certo. Você NUNCA explica a estratégia, o cálculo, o percentual ou a base legal, porque esse é o diferencial da WM e quem cuida é o especialista do time.\n\nSEU OBJETIVO\nTirar dúvidas e completar os dados da simulação, em mensagens curtas. Metragem, início, término e cidade já vêm do relatório, então você só confirma de leve.\nColete, na ordem: confirmar a metragem; confirmar início e término previsto; o estado, sabendo que a base é SP; se é pessoa física ou pessoa jurídica; se tem piscina; a destinação ou tipo da obra, como unifamiliar, multifamiliar, comercial, salas comerciais ou galpão industrial; se usou pré-moldados de concreto comprados prontos, tipo vigas, pilares ou paredes externas; e se usou concreto usinado.\nAs duas últimas são perguntas factuais, sem explicar o motivo. Se o lead não souber, você pode dizer que essas informações costumam estar no alvará da obra.\nO contexto que chega em cada mensagem mostra o que já foi confirmado e o que ainda falta, então pergunte só o que falta.\n\nMAPEAMENTO DO LEAD (obrigatório em toda resposta)\nreceptividade: receptivo, neutro ou resistente.\nperfil: uma linha curta e útil para o fechamento, por exemplo \"quer resolver rápido, sensível a preço\", \"desconfiado, pediu prova\" ou \"tem várias obras\".\n\nREGRAS QUE NÃO SE QUEBRAM\nNunca dê valor, percentual, prazo, desconto, resultado ou parecer definitivo.\nNunca explique decadência, fator de ajuste, pré-moldado ou qualquer estratégia de redução. Só colete.\nSe o lead pedir preço, diga que quem fecha os números é o especialista do time e siga coletando o que falta.\nSe o lead pedir para não receber mais mensagens, marque optout igual a true e responda uma despedida curta e educada.\nSe a dúvida for muito técnica, se o lead ficar irritado ou se a conversa sair do padrão, não insista: encerre com cordialidade e marque handoff igual a true.\nQuando os dados essenciais estiverem completos, marque handoff igual a true e avise que vai encaminhar as informações para um especialista do time, que já vai chamar.\n\nFORMATO DA SAÍDA\nResponda sempre no formato JSON pedido. O campo resposta é o texto exato que vai para o WhatsApp do lead, curto e sem travessão. Em dados, preencha só o que já está confirmado e deixe o resto como string vazia. O campo status deve ser coletando, qualificado, transferido ou optout."
+        }
+      }
+    },
+    {
+      "id": "c0492bc9-5e7a-4955-9de4-f3e3887c5aba",
+      "name": "Claude Sonnet 4.6",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        1136,
+        224
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "maxTokensToSample": 1200
+        }
+      }
+    },
+    {
+      "id": "42157d29-f8f1-4f1f-afa5-00274dc410a9",
+      "name": "Saida Estruturada da Ana",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        224
+      ],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{ \"resposta\": \"Entendi, Marcos. A metragem da obra continua em 245 m2?\", \"receptividade\": \"receptivo\", \"perfil\": \"quer resolver rapido, sensivel a preco\", \"status\": \"coletando\", \"handoff\": false, \"optout\": false, \"dados\": { \"metragem\": \"245\", \"inicio\": \"03/2019\", \"termino\": \"12/2026\", \"estado\": \"SP\", \"pf_pj\": \"PF\", \"piscina\": \"nao\", \"destinacao\": \"unifamiliar\", \"pre_moldados\": \"nao\", \"concreto_usinado\": \"sim\" } }"
+      }
+    },
+    {
+      "id": "8a81c508-b1ef-42f1-939a-4fd51cfc20cc",
+      "name": "Preparar Resposta e SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        112
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function q(v) {\n  if (v === null || v === undefined || v === '') return 'null';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\nfunction ou(v, padrao) {\n  const s = v === null || v === undefined ? '' : String(v).trim();\n  return s ? s : padrao;\n}\nfunction sn(v) {\n  const s = String(v === null || v === undefined ? '' : v).toLowerCase();\n  if (!s) return 'nao informado';\n  if (s.indexOf('sim') === 0 || s === 's' || s === 'true') return 'SIM';\n  if (s.indexOf('nao') === 0 || s.indexOf('n\\u00e3o') === 0 || s === 'n' || s === 'false') return 'NAO';\n  return String(v);\n}\n\nconst ctx = $('Rotear Conversa').first().json || {};\nconst bruta = $input.first().json || {};\nconst out = bruta.output ? bruta.output : bruta;\nconst dados = out.dados || {};\n\nconst telefone = String(ctx.telefone || '').replace(/\\D/g, '');\nconst respostaLead = ou(out.resposta, 'Perfeito, já anotei aqui. Qualquer dúvida me chama.');\n\nconst optout = out.optout === true || out.optout === 'true';\nconst handoff = !optout && (out.handoff === true || out.handoff === 'true');\nlet status = 'coletando';\nif (optout) status = 'optout';\nelse if (handoff) status = 'qualificado';\n\nlet respostaEnvio = respostaLead;\nlet telefoneEnvio = telefone;\nif (ctx.test_mode) {\n  telefoneEnvio = ctx.numero_teste;\n  respostaEnvio = '[TESTE | resposta da Ana para ' + ou(ctx.nome, 'lead') + ' | tel real: ' + telefone + ']\\n' + respostaLead;\n}\n\nconst campos = [\n  ['metragem', dados.metragem],\n  ['inicio', dados.inicio],\n  ['termino', dados.termino],\n  ['estado', dados.estado],\n  ['pf_pj', dados.pf_pj],\n  ['piscina', dados.piscina],\n  ['destinacao', dados.destinacao],\n  ['pre_moldados', dados.pre_moldados],\n  ['concreto_usinado', dados.concreto_usinado]\n];\nconst sets = [];\nfor (const c of campos) {\n  const valor = ou(c[1], '');\n  if (valor) sets.push(c[0] + ' = ' + q(valor));\n}\nsets.push('receptividade = coalesce(' + q(ou(out.receptividade, '')) + ', receptividade)');\nsets.push('perfil = coalesce(' + q(ou(out.perfil, '')) + ', perfil)');\nsets.push('status = ' + q(status));\nsets.push('ultimo_contato = now()');\nsets.push('atualizado_em = now()');\n\nconst sql = 'with m as ('\n  + 'insert into disparo.mensagens (telefone, direcao, conteudo, status) values (' + q(telefone) + ', ' + q('out') + ', ' + q(respostaLead) + ', ' + q('enviada') + ') returning 1'\n  + '), u as ('\n  + 'update disparo.leads set ' + sets.join(', ') + ' where telefone = ' + q(telefone) + ' returning 1'\n  + ') select ' + q(status) + ' as status_novo, ' + q(telefone) + ' as telefone;';\n\nconst sqlTransferido = 'update disparo.leads set status = ' + q('transferido')\n  + ', atualizado_em = now() where telefone = ' + q(telefone) + ' returning telefone, status;';\n\nconst obras = Array.isArray(ctx.obras) ? ctx.obras : [];\nconst linhasObras = obras.map(function (o) {\n  return '  . obra ' + ou(o.id_obra, 'sem id') + ': ' + ou(o.endereco, 'endereco nao informado')\n    + ' | fase ' + ou(o.fase, 'nao informada') + ' | ' + ou(o.metragem, 'sem metragem') + ' m2'\n    + ' | ' + ou(o.inicio, 'inicio nao informado') + ' a ' + ou(o.termino, 'termino nao informado');\n}).join('\\n');\n\nconst preMoldados = sn(dados.pre_moldados);\nconst usinado = sn(dados.concreto_usinado);\nconst sinais = [];\nif (preMoldados === 'SIM') sinais.push('pre-moldados de concreto comprados prontos (verificar art. 26 par. 2, exige NF e instalacao do fabricante)');\nif (usinado === 'SIM') sinais.push('concreto usinado (item de reducao separado)');\nif (ctx.possivel_decadencia) sinais.push('obra com inicio ha mais de 5 anos (avaliar decadencia)');\n\nconst resumoInterno = 'LEAD QUALIFICADO | WM Assessoria\\n'\n  + 'Nome: ' + ou(ctx.nome, 'nao informado') + (ou(ctx.nome_cliente, '') && ctx.nome_cliente !== ctx.nome ? ' (cliente no relatorio: ' + ctx.nome_cliente + ')' : '') + '\\n'\n  + 'Telefone: ' + telefone + '\\n'\n  + 'Cidade/Regiao: ' + ou(ctx.cidade, 'nao informada') + ' / ' + ou(ctx.regiao, 'nao informada') + '\\n'\n  + 'Obras:\\n' + (linhasObras || '  . sem obras registradas') + '\\n'\n  + '\\nDADOS DA SIMULACAO\\n'\n  + '  Metragem: ' + ou(dados.metragem, 'nao informada') + '\\n'\n  + '  Inicio: ' + ou(dados.inicio, 'nao informado') + ' | Termino: ' + ou(dados.termino, 'nao informado') + '\\n'\n  + '  Estado: ' + ou(dados.estado, 'nao informado') + '\\n'\n  + '  PF ou PJ: ' + ou(dados.pf_pj, 'nao informado') + '\\n'\n  + '  Piscina: ' + sn(dados.piscina) + '\\n'\n  + '  Destinacao: ' + ou(dados.destinacao, 'nao informada') + '\\n'\n  + '  Pre-moldados: ' + preMoldados + '\\n'\n  + '  Concreto usinado: ' + usinado + '\\n'\n  + '\\nLEITURA DO LEAD\\n'\n  + '  Receptividade: ' + ou(out.receptividade, 'nao classificada') + '\\n'\n  + '  Perfil: ' + ou(out.perfil, 'nao classificado') + '\\n'\n  + '\\nALERTAS INTERNOS\\n'\n  + '  Possivel decadencia: ' + (ctx.possivel_decadencia ? 'SIM' : 'NAO') + '\\n'\n  + '  Sinais de reducao: ' + (sinais.length ? sinais.join('; ') : 'nenhum identificado ainda');\n\nlet resumoEnvio = resumoInterno;\nif (ctx.test_mode) resumoEnvio = '[TESTE | resumo interno que iria para o numero 2]\\n' + resumoInterno;\n\nreturn [{\n  json: {\n    telefone: telefone,\n    telefone_envio: telefoneEnvio,\n    resposta_lead: respostaLead,\n    resposta_envio: respostaEnvio,\n    status_novo: status,\n    handoff: handoff,\n    optout: optout,\n    receptividade: out.receptividade || null,\n    perfil: out.perfil || null,\n    test_mode: ctx.test_mode === true,\n    numero_teste: ctx.numero_teste,\n    resumo_interno: resumoEnvio,\n    sql: sql,\n    sql_transferido: sqlTransferido\n  }\n}];"
+      }
+    },
+    {
+      "id": "0843c493-85c6-4195-96c6-661252745767",
+      "name": "Responder no WhatsApp (Z-API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1696,
+        112
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.telefone_envio, message: $json.resposta_envio }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f4377fea-610b-49fe-9b29-feac27f4fee6",
+      "name": "Registrar Resposta e Mapeamento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1920,
+        112
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $('Preparar Resposta e SQL').first().json.sql }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "f53b08f0-989a-4db4-a603-13d50ea6704b",
+      "name": "Handoff para o especialista?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2144,
+        112
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Preparar Resposta e SQL').first().json.handoff }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      }
+    },
+    {
+      "id": "e6be7a14-454e-4df2-915a-4988ebdb4165",
+      "name": "Notificar Especialista (Numero 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2368,
+        112
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $('Preparar Resposta e SQL').first().json.test_mode ? $('Preparar Resposta e SQL').first().json.numero_teste : ($vars.CANAL_NOTIFICACAO || $vars.NUMERO_2), message: $('Preparar Resposta e SQL').first().json.resumo_interno }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "d42fd85a-2502-4ad6-b4aa-c32c0bff7a93",
+      "name": "Marcar Transferido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2592,
+        112
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $('Preparar Resposta e SQL').first().json.sql_transferido }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "dbbcedf3-b3ea-429b-9016-4078e4c20853",
+      "name": "Preparar Optout",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function q(v) {\n  if (v === null || v === undefined || v === '') return 'null';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\n\nconst ctx = $input.first().json || {};\nconst telefone = String(ctx.telefone || '').replace(/\\D/g, '');\nconst primeiro = String(ctx.nome || '').trim().split(/\\s+/)[0] || '';\nconst saudacaoNome = primeiro ? (', ' + primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()) : '';\n\nconst resposta = 'Tudo bem' + saudacaoNome + '! Já removi seu contato da nossa lista e não vou mais te chamar. Se um dia precisar resolver o INSS de alguma obra, é só me mandar mensagem. Abraço!';\n\nlet telefoneEnvio = telefone;\nlet respostaEnvio = resposta;\nif (ctx.test_mode) {\n  telefoneEnvio = ctx.numero_teste;\n  respostaEnvio = '[TESTE | optout de ' + (ctx.nome || 'lead') + ' | tel real: ' + telefone + ']\\n' + resposta;\n}\n\nconst sql = 'with m as ('\n  + 'insert into disparo.mensagens (telefone, direcao, conteudo, status) values (' + q(telefone) + ', ' + q('out') + ', ' + q(resposta) + ', ' + q('enviada') + ') returning 1'\n  + '), u as ('\n  + 'update disparo.leads set status = ' + q('optout') + ', ultimo_contato = now(), atualizado_em = now() where telefone = ' + q(telefone) + ' returning 1'\n  + ') select ' + q('optout') + ' as status_novo, ' + q(telefone) + ' as telefone;';\n\nreturn [{\n  json: {\n    telefone: telefone,\n    telefone_envio: telefoneEnvio,\n    resposta_lead: resposta,\n    resposta_envio: respostaEnvio,\n    sql: sql\n  }\n}];"
+      }
+    },
+    {
+      "id": "0424fbd0-6443-4ed5-88f0-bb4fc2371ecc",
+      "name": "Confirmar Optout (Z-API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1472,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.telefone_envio, message: $json.resposta_envio }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "d93192fa-e2b1-4a97-9dd0-ebcda1309023",
+      "name": "Marcar Optout",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1696,
+        400
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $('Preparar Optout').first().json.sql }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "3b6a4d5e-4f03-4955-b8b3-033458a60abc",
+      "name": "Ignorar (sem LLM)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        592
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5616cfec-be66-4518-8601-10c961ba90b7",
+      "name": "Sticky Note 25f566d8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -50
+      ],
+      "parameters": {
+        "content": "## 1. Entrada e roteamento (zero LLM ate aqui)\n\nWebhook para colar no painel da Z-API em \"Ao receber\" (on-message-received).\nA URL fica em Webhook > Production URL, termina em /webhook/zapi-ana.\n\nO no de codigo descarta o que nao e conversa (fromMe, grupo, status) e detecta pedido de saida\npor regex, sem gastar LLM. O Postgres, em UMA query, registra a mensagem recebida,\nmove o status de novo/enviado para respondeu e devolve lead + config + as ultimas 20 mensagens.\nO Switch decide: atender (Ana), optout (despedida automatica) ou ignorar\n(telefone fora da base, lead ja em optout ou ja transferido). So a rota \"atender\" chama a LLM.",
+        "color": 4,
+        "width": 300,
+        "height": 200
+      }
+    },
+    {
+      "id": "f9e6e26c-22b9-4cf0-96f7-a4ff2a9c5b97",
+      "name": "Sticky Note 95df8e73",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -50
+      ],
+      "parameters": {
+        "content": "## 2. Ana: 1 chamada de LLM por mensagem\n\nclaude-sonnet-4-6 com saida estruturada (resposta, dados, receptividade, perfil, status,\nhandoff, optout). O historico vem do banco, por isso nao ha no de memoria duplicando contexto.\nA Ana confirma metragem, inicio, termino, estado, PF/PJ, piscina, destinacao,\npre-moldados e concreto usinado. Ela conhece a base legal (IN RFB 2.021/2021 e 2.212/2024)\nmas nunca explica estrategia, percentual, valor ou prazo.\n\nTodo o resto e deterministico: o no de codigo monta a resposta, o SQL de atualizacao\ne o resumo interno do handoff. TEST_MODE tambem vale aqui: resposta e resumo vao para o NUMERO_TESTE.",
+        "color": 5,
+        "width": 300,
+        "height": 200
+      }
+    },
+    {
+      "id": "f7653ced-f930-4934-be2d-cd86f4f34bc3",
+      "name": "Sticky Note 561568ea",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -50
+      ],
+      "parameters": {
+        "content": "## 3. Handoff e optout\n\nQuando a Ana marca handoff, o resumo interno completo vai por WhatsApp para\nCANAL_NOTIFICACAO (ou NUMERO_2 se a variavel nao existir) e o lead vira status=transferido.\nO resumo traz nome, telefone completo, cidade/regiao, obras, todos os dados da simulacao,\nreceptividade, perfil, \"Possivel decadencia: SIM/NAO\" e os sinais de reducao.\nO numero 2 nunca dispara nada, so recebe.\n\nOptout (LGPD): resposta curta e educada, status=optout e o lead sai da fila de disparo\npara sempre, porque a fila do Fluxo A so pega status=novo.",
+        "color": 3,
+        "width": 300,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Z-API: Mensagem Recebida": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Mensagem Recebida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Mensagem Recebida": {
+      "main": [
+        [
+          {
+            "node": "Registrar Entrada e Carregar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Entrada e Carregar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Rotear Conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotear Conversa": {
+      "main": [
+        [
+          {
+            "node": "Atender, Optout ou Ignorar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atender, Optout ou Ignorar": {
+      "main": [
+        [
+          {
+            "node": "Ana (atendimento e qualificacao)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Optout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar (sem LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ana (atendimento e qualificacao)": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta e SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet 4.6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Ana (atendimento e qualificacao)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Saida Estruturada da Ana": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Ana (atendimento e qualificacao)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resposta e SQL": {
+      "main": [
+        [
+          {
+            "node": "Responder no WhatsApp (Z-API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder no WhatsApp (Z-API)": {
+      "main": [
+        [
+          {
+            "node": "Registrar Resposta e Mapeamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Resposta e Mapeamento": {
+      "main": [
+        [
+          {
+            "node": "Handoff para o especialista?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff para o especialista?": {
+      "main": [
+        [
+          {
+            "node": "Notificar Especialista (Numero 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar Especialista (Numero 2)": {
+      "main": [
+        [
+          {
+            "node": "Marcar Transferido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Optout": {
+      "main": [
+        [
+          {
+            "node": "Confirmar Optout (Z-API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar Optout (Z-API)": {
+      "main": [
+        [
+          {
+            "node": "Marcar Optout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  }
+}

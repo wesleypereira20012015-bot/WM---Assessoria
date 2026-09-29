@@ -1,0 +1,518 @@
+{
+  "name": "WM | Fluxo A - Ingestao e Disparo (INSS de Obras)",
+  "nodes": [
+    {
+      "id": "71087960-ee2c-4b03-9343-9e3cec08cd74",
+      "name": "Gmail: Relatorio Guia da Construcao",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "maxResults": 10,
+        "filters": {
+          "q": "from:marketing@guiadaconstrucao1.com.br has:attachment filename:pdf",
+          "readStatus": "both",
+          "includeSpamTrash": true
+        },
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      }
+    },
+    {
+      "id": "df462762-3c1e-4214-9512-251d09f19a54",
+      "name": "Separar Anexos PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const saida = [];\nfor (const item of $input.all()) {\n  const bin = item.binary || {};\n  for (const chave of Object.keys(bin)) {\n    const b = bin[chave];\n    const nome = String(b.fileName || '').toLowerCase();\n    const mime = String(b.mimeType || '').toLowerCase();\n    const ehPdf = mime.indexOf('pdf') !== -1 || nome.slice(-4) === '.pdf';\n    if (!ehPdf) continue;\n    saida.push({\n      json: {\n        arquivo: b.fileName || chave,\n        email_id: item.json.id || null,\n        assunto: item.json.subject || null,\n        recebido_em: item.json.date || null\n      },\n      binary: { data: b }\n    });\n  }\n}\nreturn saida;"
+      }
+    },
+    {
+      "id": "1c0aeee6-89f2-4598-bf9c-ef03a1626c28",
+      "name": "Extrair Texto do PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "joinPages": true,
+          "keepSource": "json"
+        }
+      }
+    },
+    {
+      "id": "baa55d40-0c58-445a-9d81-fb11bacc2986",
+      "name": "Parse Relatorio CRM (regex)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const PRIORIDADE = ['proprietario', 'responsavel', 'comprador', 'engenheiro', 'construtor', 'empreiteiro', 'arquiteto', 'pedreiro'];\nconst ANY_LABEL = '(?:Cidade|Cliente|Contatos?|Obra|M[2\\u00b2]|Est[a\\u00e1]gio|In[i\\u00ed]cio|T[e\\u00e9]rmino|Endere[c\\u00e7]o|Observa[c\\u00e7][a\\u00e3]o|Filtros)\\\\s*:';\n\nfunction semAcento(s) {\n  return String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n}\nfunction limpar(s) {\n  return String(s === null || s === undefined ? '' : s).replace(/\\s+/g, ' ').trim();\n}\nfunction cortarNoProximoLabel(s) {\n  return limpar(String(s).split(new RegExp(ANY_LABEL, 'i'))[0]);\n}\nfunction campo(bloco, label) {\n  const re = new RegExp(label + '\\\\s*:\\\\s*([\\\\s\\\\S]*?)(?=' + ANY_LABEL + '|$)', 'i');\n  const m = bloco.match(re);\n  return m ? limpar(m[1]) : '';\n}\nfunction classificarNumero(bruto) {\n  const d = String(bruto).replace(/\\D/g, '');\n  if (d.length === 9 && d.charAt(0) === '9') return { numero: d, celular: true };\n  if (d.length === 8) {\n    if (Number(d.charAt(0)) >= 6) return { numero: '9' + d, celular: true };\n    return { numero: d, celular: false };\n  }\n  return null;\n}\nfunction extrairContatos(str) {\n  const lista = [];\n  const re = /\\((\\d{2})\\)\\s*(\\d[\\d\\s.\\-]{6,13})(?:\\s*\\(([^)]*)\\))?/g;\n  let m = re.exec(str);\n  while (m !== null) {\n    const meta = limpar(m[3] || '');\n    let nomeContato = meta;\n    let papel = '';\n    const sep = meta.lastIndexOf(' - ');\n    if (sep !== -1) {\n      nomeContato = limpar(meta.slice(0, sep));\n      papel = limpar(meta.slice(sep + 3));\n    } else if (meta.indexOf('-') !== -1) {\n      const partes = meta.split('-');\n      papel = limpar(partes.pop());\n      nomeContato = limpar(partes.join('-'));\n    }\n    const cls = classificarNumero(m[2]);\n    lista.push({\n      ddd: m[1],\n      bruto: limpar(m[2]),\n      numero: cls ? cls.numero : '',\n      celular: cls ? cls.celular : false,\n      valido: cls !== null,\n      nome_contato: nomeContato,\n      papel: papel\n    });\n    m = re.exec(str);\n  }\n  return lista;\n}\nfunction porPrioridade(contatos, obs) {\n  const obsN = semAcento(obs);\n  for (const c of contatos) {\n    const primeiro = semAcento(c.nome_contato).split(' ')[0];\n    if (primeiro && primeiro.length >= 4 && obsN.indexOf(primeiro) !== -1) return c;\n  }\n  for (const p of PRIORIDADE) {\n    if (obsN.indexOf(p) !== -1) {\n      const achado = contatos.filter(function (c) { return semAcento(c.papel).indexOf(p) !== -1; })[0];\n      if (achado) return achado;\n    }\n  }\n  for (const p of PRIORIDADE) {\n    const achado = contatos.filter(function (c) { return semAcento(c.papel).indexOf(p) !== -1; })[0];\n    if (achado) return achado;\n  }\n  return contatos[0];\n}\n\nconst leads = [];\nconst avisos = [];\n\nfor (const item of $input.all()) {\n  const arquivo = item.json.arquivo || 'desconhecido';\n  const texto = String(item.json.text || '');\n  const ehRelatorio = /Relat[o\\u00f3]rio\\s+CRM/i.test(texto);\n  const temFiltro = /Filtros\\s*:[\\s\\S]{0,60}?Regi[a\\u00e3]o\\s*:/i.test(texto);\n  if (!ehRelatorio || !temFiltro) {\n    avisos.push({ tipo: 'pdf_ignorado', arquivo: arquivo, motivo: 'nao contem \"Relatorio CRM\" e \"Filtros: Regiao:\"' });\n    continue;\n  }\n\n  const mReg = texto.match(/Regi[a\\u00e3]o\\s*:\\s*([^\\n\\r]*)/i);\n  const regiao = mReg ? limpar(cortarNoProximoLabel(mReg[1]).replace(/\\s+\\S+\\s*:.*$/, '')) : '';\n\n  const iCidade = texto.search(/Cidade\\s*:/i);\n  const iCliente = texto.search(/Cliente\\s*:/i);\n  let ancora = 'Cidade';\n  if (iCliente !== -1 && (iCidade === -1 || iCliente < iCidade)) ancora = 'Cliente';\n  const blocos = texto.split(new RegExp('(?=' + ancora + '\\\\s*:)', 'i'));\n\n  let cidadeAtual = '';\n  for (const bloco of blocos) {\n    const cidade = campo(bloco, 'Cidade');\n    if (cidade) cidadeAtual = cidade;\n    const nome = campo(bloco, 'Cliente');\n    const contatoRaw = campo(bloco, 'Contatos?');\n    if (!nome && !contatoRaw) continue;\n\n    const idObra = campo(bloco, 'Obra');\n    const metragem = campo(bloco, 'M[2\\u00b2]');\n    const fase = campo(bloco, 'Est[a\\u00e1]gio');\n    const inicio = campo(bloco, 'In[i\\u00ed]cio');\n    const termino = campo(bloco, 'T[e\\u00e9]rmino');\n    const endereco = campo(bloco, 'Endere[c\\u00e7]o');\n    const obs = campo(bloco, 'Observa[c\\u00e7][a\\u00e3]o');\n\n    const contatos = extrairContatos(contatoRaw);\n    if (!contatos.length) {\n      avisos.push({ tipo: 'sem_contato', arquivo: arquivo, obra: idObra, nome: nome, cidade: cidadeAtual });\n      continue;\n    }\n    const invalidos = contatos.filter(function (c) { return !c.valido; });\n    if (invalidos.length) {\n      avisos.push({ tipo: 'telefone_invalido', arquivo: arquivo, obra: idObra, nome: nome, numeros: invalidos.map(function (c) { return '(' + c.ddd + ') ' + c.bruto; }) });\n    }\n\n    const celulares = contatos.filter(function (c) { return c.valido && c.celular; });\n    const universo = celulares.length ? celulares : contatos.filter(function (c) { return c.valido; });\n    if (!universo.length) {\n      avisos.push({ tipo: 'nenhum_telefone_valido', arquivo: arquivo, obra: idObra, nome: nome });\n      continue;\n    }\n    const alvo = porPrioridade(universo, obs);\n    const semCelular = !alvo.celular;\n    if (semCelular) {\n      avisos.push({ tipo: 'sem_celular', arquivo: arquivo, obra: idObra, nome: nome, telefone: '(' + alvo.ddd + ') ' + alvo.bruto, papel: alvo.papel });\n    }\n\n    leads.push({\n      json: {\n        id_obra: idObra,\n        nome: alvo.nome_contato || nome,\n        nome_cliente: nome,\n        ddd: alvo.ddd,\n        numero: alvo.numero,\n        papel: alvo.papel,\n        nome_contato: alvo.nome_contato,\n        cidade: cidadeAtual,\n        regiao: regiao,\n        metragem: metragem,\n        fase: fase,\n        inicio: inicio,\n        termino: termino,\n        endereco: endereco,\n        obs: obs,\n        sem_celular: semCelular,\n        contatos_no_bloco: contatos.length,\n        arquivo: arquivo\n      }\n    });\n  }\n}\n\nif (avisos.length) console.log('avisos de parse: ' + JSON.stringify(avisos));\nreturn leads;"
+      }
+    },
+    {
+      "id": "c4b062cd-570f-4b49-ab30-fb1508457871",
+      "name": "Tratar, Deduplicar Lote e Sinalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function limpar(s) {\n  return String(s === null || s === undefined ? '' : s).replace(/\\s+/g, ' ').trim();\n}\nfunction normalizarTelefone(ddd, numero) {\n  const d = String(ddd || '').replace(/\\D/g, '');\n  let n = String(numero || '').replace(/\\D/g, '');\n  if (n.length === 8 && Number(n.charAt(0)) >= 6) n = '9' + n;\n  if (d.length !== 2 || Number(d) < 11 || Number(d) > 99) return null;\n  if (n.length !== 8 && n.length !== 9) return null;\n  return '55' + d + n;\n}\nfunction mesesDesde(mmAAAA) {\n  const m = String(mmAAAA || '').match(/(\\d{1,2})\\s*[\\/\\-.]\\s*(\\d{4})/);\n  if (!m) return null;\n  const mes = Number(m[1]);\n  const ano = Number(m[2]);\n  if (!mes || !ano || mes < 1 || mes > 12) return null;\n  const agora = $now.setZone('America/Sao_Paulo');\n  return (agora.year - ano) * 12 + (agora.month - mes);\n}\n\nconst porTelefone = {};\nconst invalidos = [];\n\nfor (const item of $input.all()) {\n  const l = item.json;\n  const telefone = normalizarTelefone(l.ddd, l.numero);\n  if (!telefone) {\n    invalidos.push({ tipo: 'telefone_nao_normalizado', nome: l.nome, ddd: l.ddd, numero: l.numero, obra: l.id_obra, arquivo: l.arquivo });\n    continue;\n  }\n  const meses = mesesDesde(l.inicio);\n  const decadencia = meses !== null && meses > 60;\n  const obra = {\n    id_obra: l.id_obra,\n    endereco: l.endereco,\n    fase: l.fase,\n    metragem: l.metragem,\n    inicio: l.inicio,\n    termino: l.termino,\n    possivel_decadencia: decadencia\n  };\n  if (!porTelefone[telefone]) {\n    porTelefone[telefone] = {\n      telefone: telefone,\n      nome: limpar(l.nome),\n      nome_cliente: limpar(l.nome_cliente),\n      papel: limpar(l.papel),\n      cidade: limpar(l.cidade),\n      regiao: limpar(l.regiao),\n      obras: [obra],\n      multi_obra: false,\n      metragem: l.metragem,\n      inicio: l.inicio,\n      termino: l.termino,\n      obs: limpar(l.obs),\n      sem_celular: !!l.sem_celular,\n      possivel_decadencia: decadencia,\n      arquivos: [l.arquivo]\n    };\n  } else {\n    const alvo = porTelefone[telefone];\n    const jaTem = alvo.obras.filter(function (o) { return o.id_obra === obra.id_obra; }).length > 0;\n    if (!jaTem) alvo.obras.push(obra);\n    alvo.multi_obra = alvo.obras.length > 1;\n    alvo.possivel_decadencia = alvo.possivel_decadencia || decadencia;\n    if (alvo.arquivos.indexOf(l.arquivo) === -1) alvo.arquivos.push(l.arquivo);\n    if (!alvo.obs && l.obs) alvo.obs = limpar(l.obs);\n  }\n}\n\nconst saida = Object.keys(porTelefone).map(function (t) {\n  const lead = porTelefone[t];\n  lead.multi_obra = lead.obras.length > 1;\n  return { json: lead };\n});\n\nif (invalidos.length) console.log('telefones invalidos: ' + JSON.stringify(invalidos));\nsaida.push({ json: { __log: true, tipo: 'resumo_parse', total_leads: saida.length, telefones_invalidos: invalidos } });\nreturn saida;"
+      }
+    },
+    {
+      "id": "11ec7c5c-581a-4f34-8272-a1c62831309f",
+      "name": "Buscar Leads Existentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select telefone, status from disparo.leads;"
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f8d56a2a-14df-4586-9015-11f0f7fd7d69",
+      "name": "Filtrar Novos e Montar SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function q(v) {\n  if (v === null || v === undefined || v === '') return 'null';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\nfunction b(v) {\n  return v ? 'true' : 'false';\n}\n\nconst entrada = $('Tratar, Deduplicar Lote e Sinalizar').all().map(function (i) { return i.json; });\nconst leads = entrada.filter(function (l) { return !l.__log; });\nconst logs = entrada.filter(function (l) { return l.__log; });\n\nconst existentes = {};\nfor (const linha of $('Buscar Leads Existentes').all()) {\n  if (linha.json && linha.json.telefone) existentes[linha.json.telefone] = linha.json.status;\n}\n\nconst saida = [];\nconst pulados = [];\n\nfor (const lead of leads) {\n  const statusAtual = existentes[lead.telefone];\n  if (statusAtual && statusAtual !== 'erro') {\n    pulados.push({ telefone: lead.telefone, status: statusAtual });\n    continue;\n  }\n  const status = lead.sem_celular ? 'erro' : 'novo';\n  const sql = 'insert into disparo.leads (telefone, nome, nome_cliente, papel, cidade, regiao, obras, multi_obra, metragem, inicio, termino, obs, possivel_decadencia, sem_celular, status, origem) values ('\n    + q(lead.telefone) + ', ' + q(lead.nome) + ', ' + q(lead.nome_cliente) + ', ' + q(lead.papel) + ', ' + q(lead.cidade) + ', ' + q(lead.regiao) + ', '\n    + q(JSON.stringify(lead.obras || [])) + '::jsonb, ' + b(lead.multi_obra) + ', ' + q(lead.metragem) + ', '\n    + q(lead.inicio) + ', ' + q(lead.termino) + ', ' + q(lead.obs) + ', ' + b(lead.possivel_decadencia) + ', '\n    + b(lead.sem_celular) + ', ' + q(status) + \", 'guia_da_construcao') \"\n    + 'on conflict (telefone) do update set '\n    + 'nome = coalesce(excluded.nome, disparo.leads.nome), '\n    + 'nome_cliente = coalesce(excluded.nome_cliente, disparo.leads.nome_cliente), '\n    + 'papel = coalesce(excluded.papel, disparo.leads.papel), '\n    + 'cidade = coalesce(excluded.cidade, disparo.leads.cidade), '\n    + 'regiao = coalesce(excluded.regiao, disparo.leads.regiao), '\n    + 'obras = excluded.obras, multi_obra = excluded.multi_obra, '\n    + 'metragem = coalesce(excluded.metragem, disparo.leads.metragem), '\n    + 'inicio = coalesce(excluded.inicio, disparo.leads.inicio), '\n    + 'termino = coalesce(excluded.termino, disparo.leads.termino), '\n    + 'obs = coalesce(excluded.obs, disparo.leads.obs), '\n    + 'possivel_decadencia = excluded.possivel_decadencia, sem_celular = excluded.sem_celular, '\n    + \"status = case when disparo.leads.status = 'erro' and excluded.sem_celular = false then 'novo' else disparo.leads.status end, \"\n    + 'atualizado_em = now() returning telefone, status;';\n  saida.push({ json: { telefone: lead.telefone, nome: lead.nome, status: status, sql: sql } });\n}\n\nconst resumo = {\n  leads_no_lote: leads.length,\n  gravados: saida.length,\n  pulados_ja_existentes: pulados.length,\n  detalhe_pulados: pulados.slice(0, 50),\n  parse: logs\n};\nsaida.push({\n  json: {\n    telefone: null,\n    nome: 'log',\n    status: 'log',\n    sql: 'insert into disparo.log_ingestao (tipo, detalhe) values (' + q('ingestao_email') + ', ' + q(JSON.stringify(resumo)) + '::jsonb) returning id;'\n  }\n});\nreturn saida;"
+      }
+    },
+    {
+      "id": "dea9fbe0-b23f-4133-b5fe-532a4032dde2",
+      "name": "Salvar Leads (status novo)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "6ab54f26-2aca-464d-8e8f-e8e8fca13d1e",
+      "name": "Agenda de Disparo (30 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        416
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "886685b6-6d0c-4cf2-969d-87f657529d34",
+      "name": "Fila, Contadores e Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        416
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with cfg as (\n  select coalesce(jsonb_object_agg(chave, valor), '{}'::jsonb) as config from disparo.config\n), cont as (\n  select\n    (select count(*) from disparo.mensagens where direcao = 'out' and criado_em > now() - interval '1 hour') as enviados_hora,\n    (select count(*) from disparo.mensagens where direcao = 'out'\n       and (criado_em at time zone 'America/Sao_Paulo')::date = (now() at time zone 'America/Sao_Paulo')::date) as enviados_hoje,\n    (select count(*) from disparo.mensagens where direcao = 'out') as total_out,\n    (select min((criado_em at time zone 'America/Sao_Paulo')::date) from disparo.mensagens where direcao = 'out') as primeiro_dia\n), fila as (\n  select coalesce(jsonb_agg(to_jsonb(l)), '[]'::jsonb) as leads from (\n    select telefone, nome, nome_cliente, papel, cidade, regiao, obras, multi_obra, metragem, inicio, termino\n    from disparo.leads\n    where status = 'novo' and sem_celular = false\n    order by criado_em asc\n    limit 50\n  ) l\n)\nselect cfg.config, cont.enviados_hora, cont.enviados_hoje, cont.total_out, cont.primeiro_dia, fila.leads\nfrom cfg, cont, fila;"
+      }
+    },
+    {
+      "id": "1fee6800-fb4e-43bb-9ae5-9df137e15153",
+      "name": "Selecionar Lote e Montar Mensagens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        416
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const linha = $input.first().json;\nconst cfg = linha.config || {};\nfunction num(chave, padrao) {\n  const v = Number(cfg[chave]);\n  return isNaN(v) ? padrao : v;\n}\nconst TEST_MODE = String(cfg.TEST_MODE || 'true').toLowerCase() === 'true';\nconst NUMERO_TESTE = String(cfg.NUMERO_TESTE || '5565999725622').replace(/\\D/g, '');\nconst MAX_HORA = num('MAX_HORA', 15);\nconst MAX_DIA_INICIAL = num('MAX_DIA_INICIAL', 20);\nconst MAX_DIA_INCREMENTO = num('MAX_DIA_INCREMENTO', 15);\nconst MAX_DIA_TETO = num('MAX_DIA_TETO', 90);\nconst DELAY_MIN_S = num('DELAY_MIN_S', 30);\nconst DELAY_MAX_S = num('DELAY_MAX_S', 90);\nconst JANELA_INICIO = num('JANELA_INICIO', 9);\nconst JANELA_FIM = num('JANELA_FIM', 19);\nconst LOTE_MAX = num('LOTE_MAX_EXECUCAO', 8);\n\nconst agora = $now.setZone('America/Sao_Paulo');\nconst hora = agora.hour;\nif (hora < JANELA_INICIO || hora >= JANELA_FIM) {\n  console.log('fora da janela de disparo (' + hora + 'h SP)');\n  return [];\n}\n\nlet diasDeAquecimento = 0;\nif (linha.primeiro_dia) {\n  const inicio = String(linha.primeiro_dia).slice(0, 10).split('-');\n  const d0 = Date.UTC(Number(inicio[0]), Number(inicio[1]) - 1, Number(inicio[2]));\n  const hoje = Date.UTC(agora.year, agora.month - 1, agora.day);\n  diasDeAquecimento = Math.max(0, Math.round((hoje - d0) / 86400000));\n}\nconst MAX_DIA = Math.min(MAX_DIA_INICIAL + MAX_DIA_INCREMENTO * diasDeAquecimento, MAX_DIA_TETO);\n\nconst restaHora = MAX_HORA - Number(linha.enviados_hora || 0);\nconst restaDia = MAX_DIA - Number(linha.enviados_hoje || 0);\nconst disponivel = Math.max(0, Math.min(restaHora, restaDia, LOTE_MAX));\nconst fila = Array.isArray(linha.leads) ? linha.leads : [];\nif (disponivel <= 0 || !fila.length) {\n  console.log('nada a enviar. disponivel=' + disponivel + ' fila=' + fila.length + ' max_dia=' + MAX_DIA);\n  return [];\n}\n\nfunction saudacao(h) {\n  if (h < 12) return 'Bom dia';\n  if (h < 18) return 'Boa tarde';\n  return 'Boa noite';\n}\nfunction primeiroNome(nome) {\n  const partes = String(nome || '').trim().split(/\\s+/);\n  const bruto = partes[0] || '';\n  return bruto.charAt(0).toUpperCase() + bruto.slice(1).toLowerCase();\n}\nfunction ruaCurta(endereco) {\n  let e = String(endereco || '').split(',')[0];\n  e = e.replace(/\\s+n?[o\\u00ba\\u00b0]?\\.?\\s*\\d+.*$/i, '');\n  e = e.replace(/\\s*-\\s*.*$/, '');\n  return e.trim();\n}\nfunction referenciaCurta(lead) {\n  const obras = Array.isArray(lead.obras) ? lead.obras : [];\n  const multi = lead.multi_obra || obras.length > 1;\n  if (multi) return '';\n  const rua = ruaCurta(obras.length ? obras[0].endereco : '');\n  return rua || String(lead.cidade || '').trim();\n}\n\nconst TEMPLATES = [\n  function (s, n) { return s + ', ' + n + '! Aqui é a Ana, da equipe da WM Assessoria. Um parceiro nosso esteve na obra e me passou seu contato. Rapidinho: o INSS dessa obra já foi regularizado ou ainda tá pendente?'; },\n  function (s, n) { return s + ', ' + n + ', tudo bem? Ana aqui, da WM Assessoria. A gente cuida da regularização do INSS de obras aqui na região. Passando pra saber: já resolveu essa parte da sua obra ou ainda não?'; },\n  function (s, n, r) { return s + ', ' + n + '! É a Ana, da WM Assessoria. Um parceiro que passou na obra me deixou seu contato. Você já cuidou do INSS da obra (' + r + ') ou ainda tá em aberto?'; },\n  function (s, n) { return s + ', ' + n + ', aqui é a Ana da WM Assessoria. Trabalhamos com redução do INSS de obras. Sua obra já foi regularizada na Receita ou ainda não chegou nessa etapa?'; },\n  function (s, n, r) { return s + ', ' + n + '! Ana, da WM Assessoria. Vi que sua obra (' + r + ') tá em andamento. Já pensou na regularização do INSS dela? Muita gente deixa pro fim e acaba pagando mais.'; }\n];\nconst SEM_REFERENCIA = [0, 1, 3];\nconst COM_REFERENCIA = [0, 1, 2, 3, 4];\n\nconst totalOut = Number(linha.total_out || 0);\nconst semNome = [];\nconst selecionados = fila.filter(function (l) {\n  const temNome = String(l.nome || '').trim().length >= 2;\n  if (!temNome) semNome.push(l.telefone);\n  return temNome;\n}).slice(0, disponivel);\nif (semNome.length) console.log('leads sem nome, nao enviados: ' + JSON.stringify(semNome));\nconst saida = [];\n\nfor (let i = 0; i < selecionados.length; i++) {\n  const lead = selecionados[i];\n  const ref = referenciaCurta(lead);\n  const elegiveis = ref ? COM_REFERENCIA : SEM_REFERENCIA;\n  const idx = elegiveis[(totalOut + i) % elegiveis.length];\n  const mensagemLead = TEMPLATES[idx](saudacao(hora), primeiroNome(lead.nome), ref);\n  const telefoneReal = String(lead.telefone).replace(/\\D/g, '');\n  let telefoneEnvio = telefoneReal;\n  let mensagemEnvio = mensagemLead;\n  if (TEST_MODE) {\n    telefoneEnvio = NUMERO_TESTE;\n    mensagemEnvio = '[TESTE | lead: ' + (lead.nome || '') + ' | tel real: ' + telefoneReal + ' | ' + (lead.cidade || '') + '/' + (lead.regiao || '') + ']\\n' + mensagemLead;\n  }\n  saida.push({\n    json: {\n      telefone: telefoneReal,\n      telefone_envio: telefoneEnvio,\n      mensagem_lead: mensagemLead,\n      mensagem_envio: mensagemEnvio,\n      template_idx: idx,\n      delay_s: Math.floor(Math.random() * (DELAY_MAX_S - DELAY_MIN_S + 1)) + DELAY_MIN_S,\n      nome: lead.nome,\n      cidade: lead.cidade,\n      regiao: lead.regiao,\n      test_mode: TEST_MODE,\n      max_dia: MAX_DIA,\n      posicao: i + 1,\n      total_lote: selecionados.length\n    }\n  });\n}\nreturn saida;"
+      }
+    },
+    {
+      "id": "ddbf3934-ed4c-417d-b8b2-524e0d4dd4c7",
+      "name": "Resumo do Disparo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        224
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const enviados = $input.all().map(function (i) { return i.json; });\nconst ok = enviados.filter(function (e) { return e.status_envio === 'enviado'; }).length;\nreturn [{\n  json: {\n    executado_em: $now.setZone('America/Sao_Paulo').toISO(),\n    total_tentativas: enviados.length,\n    enviados: ok,\n    erros: enviados.length - ok\n  }\n}];"
+      }
+    },
+    {
+      "id": "dc84cac9-2e1b-4ffa-b38a-c340c4642b0b",
+      "name": "Aguardar Intervalo Aleatorio",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        416
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $json.delay_s }}",
+        "unit": "seconds"
+      },
+      "webhookId": "9fb57323-3b2e-4bd1-b26d-efb3d693340a"
+    },
+    {
+      "id": "f3b19ec3-142a-4887-8f61-a51f1ef0f062",
+      "name": "Enviar Texto (Z-API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        416
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.z-api.io/instances/{{ $vars.ZAPI_INSTANCE }}/token/{{ $vars.ZAPI_TOKEN }}/send-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.telefone_envio, message: $json.mensagem_envio }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a9de590e-526c-459e-aa5e-dd1bb71ed8b9",
+      "name": "Montar SQL do Envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        416
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "function q(v) {\n  if (v === null || v === undefined || v === '') return 'null';\n  return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";\n}\n\nconst contexto = $('Aguardar Intervalo Aleatorio').all()[0].json;\nconst resposta = $input.first().json || {};\nconst codigo = Number(resposta.statusCode || 0);\nconst corpo = resposta.body === undefined ? resposta : resposta.body;\nconst ok = codigo >= 200 && codigo < 300 && !(corpo && corpo.error);\nconst status = ok ? 'enviado' : 'erro';\nconst telefone = q(contexto.telefone);\n\nconst registroMensagem = 'insert into disparo.mensagens (telefone, template_idx, direcao, conteudo, status) values ('\n  + telefone + ', ' + Number(contexto.template_idx || 0) + \", 'out', \" + q(contexto.mensagem_lead) + ', ' + q(status) + ') returning 1';\n\nlet atualizaLead;\nif (ok) {\n  atualizaLead = 'update disparo.leads set status = ' + q('enviado')\n    + ', template_idx = ' + Number(contexto.template_idx || 0)\n    + ', primeiro_contato = coalesce(primeiro_contato, now()), ultimo_contato = now(), atualizado_em = now() where telefone = ' + telefone + ' returning 1';\n} else {\n  atualizaLead = 'update disparo.leads set status = case when (select count(*) from disparo.mensagens where telefone = ' + telefone\n    + \" and direcao = 'out' and status = 'erro') >= 2 then 'erro' else 'novo' end\"\n    + ', ultimo_contato = now(), atualizado_em = now() where telefone = ' + telefone + ' returning 1';\n}\n\nconst sql = 'with m as (' + registroMensagem + '), u as (' + atualizaLead + ') select ' + q(status) + ' as status_envio, ' + telefone + ' as telefone;';\n\nreturn [{\n  json: {\n    telefone: contexto.telefone,\n    telefone_envio: contexto.telefone_envio,\n    nome: contexto.nome,\n    template_idx: contexto.template_idx,\n    status_envio: status,\n    http_status: codigo,\n    resposta_zapi: corpo,\n    sql: sql\n  }\n}];"
+      }
+    },
+    {
+      "id": "384e7fab-f613-4404-8854-259001ae37f2",
+      "name": "Registrar Envio e Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1568,
+        496
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {
+          "queryBatching": "independently"
+        }
+      }
+    },
+    {
+      "id": "7113dcd4-497d-4d55-bf82-b8b940d4bbe8",
+      "name": "Loop de Envio",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        672,
+        416
+      ],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "28fbd4d0-44c9-409d-8392-2350a499c6f8",
+      "name": "Sticky Note fc3e7c5d",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -50
+      ],
+      "parameters": {
+        "content": "## 1. Ingestao dos relatorios\n\nGmail Trigger (polling 15 min) filtra SO por remetente + PDF, funciona com Cco.\nParse 100% regex (zero LLM): valida \"Relatorio CRM\" + \"Filtros: Regiao:\", extrai regiao dinamica,\nblocos de obra, todos os contatos e escolhe o telefone por prioridade de papel\n(Proprietario > Responsavel > Comprador > Engenheiro > Construtor > Empreiteiro > Arquiteto > Pedreiro),\ncom override quando a Observacao aponta o responsavel.\nSo celular (9 digitos comecando com 9, corrige 9o digito). So fixo => sem_celular=true, status=erro, fica para revisao.\nDedup no lote (multi_obra) + dedup com a tabela (telefone existente com status != erro e pulado).\nA ingestao NAO dispara: ela so alimenta disparo.leads com status=novo.",
+        "color": 4,
+        "width": 300,
+        "height": 200
+      }
+    },
+    {
+      "id": "e7fbc0ea-202c-44ff-93dd-1878c010cf15",
+      "name": "Sticky Note cb9f27fa",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -50
+      ],
+      "parameters": {
+        "content": "## 2. Disparo com throttle, aquecimento e TEST_MODE\n\nA fila e drenada pela agenda (a cada 30 min), nunca em rajada quando o e-mail chega.\nLimites e config vivem em disparo.config (editavel por SQL, sem mexer no workflow):\nTEST_MODE, NUMERO_TESTE, MAX_HORA=15, aquecimento MAX_DIA 20 +15/dia ate 90,\ndelay aleatorio 30-90s, janela 9h-19h (America/Sao_Paulo), LOTE_MAX_EXECUCAO=8.\n\nTEST_MODE=true: todo envio vai para NUMERO_TESTE com o cabecalho\n[TESTE | lead: nome | tel real: 55... | cidade/regiao] antes da mensagem real.\nPara ir a producao: update disparo.config set valor = false where chave = TEST_MODE.\n\nSecrets nunca ficam no workflow: a URL usa as variaveis ZAPI_INSTANCE e ZAPI_TOKEN\n(n8n > Settings > Variables) e o header Client-Token vem da credencial \"Z-API Client-Token\".\nSe o seu plano n8n nao tiver Variables, troque as duas variaveis por valores no proprio no HTTP.",
+        "color": 3,
+        "width": 300,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Gmail: Relatorio Guia da Construcao": {
+      "main": [
+        [
+          {
+            "node": "Separar Anexos PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar Anexos PDF": {
+      "main": [
+        [
+          {
+            "node": "Extrair Texto do PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Texto do PDF": {
+      "main": [
+        [
+          {
+            "node": "Parse Relatorio CRM (regex)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Relatorio CRM (regex)": {
+      "main": [
+        [
+          {
+            "node": "Tratar, Deduplicar Lote e Sinalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tratar, Deduplicar Lote e Sinalizar": {
+      "main": [
+        [
+          {
+            "node": "Buscar Leads Existentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Leads Existentes": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Novos e Montar SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Novos e Montar SQL": {
+      "main": [
+        [
+          {
+            "node": "Salvar Leads (status novo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda de Disparo (30 min)": {
+      "main": [
+        [
+          {
+            "node": "Fila, Contadores e Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila, Contadores e Config": {
+      "main": [
+        [
+          {
+            "node": "Selecionar Lote e Montar Mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selecionar Lote e Montar Mensagens": {
+      "main": [
+        [
+          {
+            "node": "Loop de Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Intervalo Aleatorio": {
+      "main": [
+        [
+          {
+            "node": "Enviar Texto (Z-API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Texto (Z-API)": {
+      "main": [
+        [
+          {
+            "node": "Montar SQL do Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar SQL do Envio": {
+      "main": [
+        [
+          {
+            "node": "Registrar Envio e Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Envio e Status": {
+      "main": [
+        [
+          {
+            "node": "Loop de Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop de Envio": {
+      "main": [
+        [
+          {
+            "node": "Resumo do Disparo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aguardar Intervalo Aleatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  }
+}
