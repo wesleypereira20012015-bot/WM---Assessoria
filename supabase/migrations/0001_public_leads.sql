@@ -44,3 +44,21 @@ create policy "leads: insert publico"
 -- ...e nada mais. Sem policy de SELECT/UPDATE/DELETE, o RLS nega essas
 -- operações para anon/authenticated. O /admin lê via service_role, que
 -- ignora o RLS por definição.
+
+-- ---------- Privilégios explícitos (defesa em profundidade) ----------
+-- O Supabase concede privilégios a anon/authenticated por default
+-- privileges nas tabelas novas de `public`. Sem as linhas abaixo, a
+-- proteção da leitura ficaria dependendo SÓ do RLS: bastaria alguém
+-- adicionar uma policy de SELECT por engano para os dados dos leads
+-- (nome, WhatsApp, e-mail) vazarem pela chave publishable, que roda no
+-- navegador. Explicitar o grant mínimo torna isso independente do
+-- comportamento padrão do Supabase.
+revoke all on public.leads from anon, authenticated;
+grant insert on public.leads to anon, authenticated;
+
+-- CUIDADO ao mexer em lib/db.ts: como anon tem INSERT mas não SELECT, um
+-- insert com RETURNING é recusado ("permission denied for table leads").
+-- Hoje `salvarLead` faz `.insert({...})` sem `.select()`, que não gera
+-- RETURNING — por isso funciona. Se algum dia for preciso ler de volta o
+-- registro criado (para pegar o id, por exemplo), faça isso no servidor
+-- com a service_role, não com a chave publishable.
