@@ -216,7 +216,35 @@ cd WM---Assessoria/n8n && git checkout main-5lvhvn && ls
 
 Você deve ver `Caddyfile`, `docker-compose.yml`, `README.md`, entre outros.
 
-## 2.7 Preencher as configurações
+## 2.7 Caminho curto: deixar o script fazer o resto
+
+Daqui para frente há um atalho. O arquivo `instalar.sh` faz os passos 2.4
+a 2.8 sozinho: instala o Docker, libera o firewall, faz 5 perguntas, gera
+as senhas, confere o DNS e sobe tudo.
+
+```bash
+bash instalar.sh
+```
+
+Ele pergunta o subdomínio, o e-mail, os dois dados da Z-API e o WhatsApp
+que recebe os leads. As senhas do sistema ele gera sozinho — você não
+precisa inventar nem digitar nenhuma.
+
+**Se o DNS ainda não estiver apontando, ele avisa e para** em vez de
+queimar a tentativa de certificado. Pode rodar de novo quantas vezes
+quiser: ele detecta o que já está feito e não sobrescreve um `.env`
+existente sem perguntar.
+
+Quando terminar, ele mostra o endereço para abrir no navegador. **Pule
+para a [Parte 3](#parte-3--credenciais).**
+
+> O script exibe a `N8N_ENCRYPTION_KEY` uma vez, em destaque, e espera
+> você confirmar que copiou. É a única chance — depois ela fica só dentro
+> do `.env` no servidor.
+
+Se preferir fazer à mão, ou se o script falhar, continue abaixo.
+
+## 2.7b Preencher as configurações (manual)
 
 Gere as duas senhas do sistema:
 
